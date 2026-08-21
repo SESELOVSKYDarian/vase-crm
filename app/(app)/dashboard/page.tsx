@@ -60,13 +60,14 @@ export default function DashboardPage() {
   const m2Entregados = workOrders.reduce((acc, o) => acc + (o.cantidadEntregada / (o.cantidadTotal || 1)) * o.m2Total, 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-vase-green">Vase CRM · Operaciones</p>
+        <h1 className="page-title">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Resumen ejecutivo de WTA · agosto 2026</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard index={0} label="Presupuestado del mes" value={formatARS(presupuestadoMes)} icon={DollarSign} accent />
         <StatCard index={1} label="Facturado del mes" value={formatARS(facturadoMes)} icon={Receipt} />
         <StatCard index={2} label="Cobrado del mes" value={formatARS(cobradoMes)} icon={Wallet} />
@@ -77,8 +78,8 @@ export default function DashboardPage() {
         <StatCard index={7} label="m² entregados" value={formatM2(m2Entregados)} icon={Truck} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <Card className="surface-shell xl:col-span-2">
           <CardHeader>
             <CardTitle>Presupuestado vs. cobrado</CardTitle>
             <CardDescription>Últimos 6 meses, en millones de ARS</CardDescription>
@@ -110,7 +111,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="surface-shell">
           <CardHeader>
             <CardTitle>Presupuestado por categoría</CardTitle>
             <CardDescription>% del mes en curso</CardDescription>
@@ -138,8 +139,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <Card className="surface-shell">
           <CardHeader>
             <CardTitle>Presupuestos recientes</CardTitle>
             <CardDescription>Últimos movimientos</CardDescription>
@@ -173,7 +174,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="surface-shell">
           <CardHeader>
             <CardTitle>Producción en curso</CardTitle>
             <CardDescription>Órdenes de trabajo activas</CardDescription>
