@@ -15,7 +15,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { QuoteStatusBadge, WorkOrderStatusBadge } from "@/components/shared/status-badges";
 import { formatARS, formatM2, formatDate } from "@/lib/format";
-import { quotes, workOrders, getClient } from "@/lib/mock-data";
+import { quotes, workOrders, invoices, payments, getClient } from "@/lib/mock-data";
 import {
   AreaChart,
   Area,
@@ -32,14 +32,7 @@ import {
 } from "recharts";
 import Link from "next/link";
 
-const ventasMensuales = [
-  { mes: "Mar", presupuestado: 4.2, cobrado: 3.1 },
-  { mes: "Abr", presupuestado: 5.1, cobrado: 4.0 },
-  { mes: "May", presupuestado: 4.8, cobrado: 4.4 },
-  { mes: "Jun", presupuestado: 6.3, cobrado: 5.2 },
-  { mes: "Jul", presupuestado: 7.0, cobrado: 6.1 },
-  { mes: "Ago", presupuestado: 8.4, cobrado: 5.9 },
-];
+const ventasMensuales = [{ mes: "Mar", presupuestado: 0, cobrado: 0 }, { mes: "Abr", presupuestado: 0, cobrado: 0 }, { mes: "May", presupuestado: 0, cobrado: 0 }, { mes: "Jun", presupuestado: 0, cobrado: 0 }, { mes: "Jul", presupuestado: 0, cobrado: 0 }, { mes: "Ago", presupuestado: 0, cobrado: 0 }];
 
 const categoriaData = [
   { name: "Simple", value: 38, color: "#16A34A" },
@@ -49,6 +42,16 @@ const categoriaData = [
 ];
 
 export default function DashboardPage() {
+  const mesActual = "2026-08";
+  const presupuestadoMes = quotes.filter((q) => q.fecha.startsWith(mesActual)).reduce((total, q) => total + q.total, 0);
+  const facturadoMes = invoices.filter((i) => i.fecha.startsWith(mesActual)).reduce((total, i) => total + i.total, 0);
+  const cobradoMes = payments.filter((p) => p.fecha.startsWith(mesActual)).reduce((total, p) => total + (p.montoEquivalenteArs ?? p.importe), 0);
+  const saldoPendiente = invoices.reduce((total, i) => total + Math.max(0, i.total - i.montoCobrado), 0);
+  const ventasReales = ventasMensuales.map((item) => {
+    const monthIndex = ["Mar", "Abr", "May", "Jun", "Jul", "Ago"].indexOf(item.mes) + 3;
+    const prefix = `2026-${String(monthIndex).padStart(2, "0")}`;
+    return { mes: item.mes, presupuestado: quotes.filter((q) => q.fecha.startsWith(prefix)).reduce((total, q) => total + q.total, 0) / 1_000_000, cobrado: payments.filter((p) => p.fecha.startsWith(prefix)).reduce((total, p) => total + (p.montoEquivalenteArs ?? p.importe), 0) / 1_000_000 };
+  });
   const otActivas = workOrders.filter((o) => o.estadoProductivo === "EN_PROCESO" || o.estadoProductivo === "PENDIENTE");
   const otAtrasadas = workOrders.filter(
     (o) => new Date(o.fechaEntrega) < new Date("2026-08-20") && o.estadoProductivo !== "TERMINADA"
@@ -64,10 +67,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard index={0} label="Presupuestado del mes" value={formatARS(8_400_000)} icon={DollarSign} trend={{ value: "12% vs. jul", positive: true }} accent />
-        <StatCard index={1} label="Facturado del mes" value={formatARS(922_014)} icon={Receipt} trend={{ value: "8% vs. jul", positive: true }} />
-        <StatCard index={2} label="Cobrado del mes" value={formatARS(565_000)} icon={Wallet} trend={{ value: "3% vs. jul", positive: false }} />
-        <StatCard index={3} label="Saldo pendiente" value={formatARS(4_178_968)} icon={AlertTriangle} />
+        <StatCard index={0} label="Presupuestado del mes" value={formatARS(presupuestadoMes)} icon={DollarSign} accent />
+        <StatCard index={1} label="Facturado del mes" value={formatARS(facturadoMes)} icon={Receipt} />
+        <StatCard index={2} label="Cobrado del mes" value={formatARS(cobradoMes)} icon={Wallet} />
+        <StatCard index={3} label="Saldo pendiente" value={formatARS(saldoPendiente)} icon={AlertTriangle} />
         <StatCard index={4} label="OT activas" value={String(otActivas.length)} icon={Factory} />
         <StatCard index={5} label="OT atrasadas" value={String(otAtrasadas.length)} icon={Clock} />
         <StatCard index={6} label="m² en producción" value={formatM2(m2EnProduccion)} icon={Layers} />
@@ -80,9 +83,9 @@ export default function DashboardPage() {
             <CardTitle>Presupuestado vs. cobrado</CardTitle>
             <CardDescription>Últimos 6 meses, en millones de ARS</CardDescription>
           </CardHeader>
-          <CardContent className="h-72 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={ventasMensuales} margin={{ left: -20, right: 10, top: 10 }}>
+          <CardContent className="h-80 min-h-[300px] pt-2">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
+              <AreaChart data={ventasReales} margin={{ left: -20, right: 10, top: 10 }}>
                 <defs>
                   <linearGradient id="presupuestado" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#16A34A" stopOpacity={0.35} />

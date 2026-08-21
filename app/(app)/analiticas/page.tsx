@@ -56,8 +56,8 @@ export default function AnaliticasPage() {
             <CardTitle>Presupuestado por categoría (A vs. N)</CardTitle>
             <CardDescription>ARS del mes en curso</CardDescription>
           </CardHeader>
-          <CardContent className="h-72 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent className="h-80 min-h-[300px] pt-2">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
               <BarChart data={porCategoria} margin={{ left: -10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="categoria" fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
@@ -76,8 +76,8 @@ export default function AnaliticasPage() {
             <CardTitle>Cobranza por método de pago</CardTitle>
             <CardDescription>ARS equivalentes, mes en curso</CardDescription>
           </CardHeader>
-          <CardContent className="h-72 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent className="h-80 min-h-[300px] pt-2">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
               <BarChart data={cobranzaPorMetodo} layout="vertical" margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
                 <XAxis type="number" fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
@@ -94,8 +94,8 @@ export default function AnaliticasPage() {
             <CardTitle>OT generadas vs. terminadas</CardTitle>
             <CardDescription>Últimos 4 meses</CardDescription>
           </CardHeader>
-          <CardContent className="h-72 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent className="h-80 min-h-[300px] pt-2">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
               <BarChart data={productivas} margin={{ left: -10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="mes" fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
