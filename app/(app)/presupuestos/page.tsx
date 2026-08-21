@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Plus, FileText, Layers, Send, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { QuoteStatusBadge, TipoFacturacionBadge } from "@/components/shared/status-badges";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -19,7 +20,11 @@ export default function PresupuestosPage() {
   const [showNew, setShowNew] = useState(false);
   const [showDrafts, setShowDrafts] = useState(false);
   const [rows, setRows] = useState<any[]>(quotes);
-  useEffect(() => { fetch("/api/quotes").then((r) => r.ok ? r.json() : null).then((payload) => { if (payload?.data?.length) setRows(payload.data); }).catch(() => {}); }, []);
+  const [deleteQuote, setDeleteQuote] = useState<any | null>(null);
+  const [message, setMessage] = useState("");
+  useEffect(() => { fetch("/api/quotes").then((r) => r.ok ? r.json() : null).then((payload) => { if (payload?.data) setRows(payload.data); }).catch(() => {}); }, []);
+  async function sendQuote(id: string) { const response = await fetch(`/api/quotes/${id}/send`, { method: "POST" }); if (response.ok) setRows((items) => items.map((item) => item.id === id ? { ...item, estado: "ENVIADO" } : item)); else setMessage((await response.json().catch(() => null))?.error ?? "No se pudo enviar el presupuesto"); }
+  async function removeQuote() { if (!deleteQuote) return; const response = await fetch(`/api/quotes/${deleteQuote.id}`, { method: "DELETE" }); if (response.ok) setRows((items) => items.filter((item) => item.id !== deleteQuote.id)); else setMessage("No se pudo eliminar el borrador"); setDeleteQuote(null); }
 
   const filtered = rows.filter(
     (q) => (estado === "TODOS" || q.estado === estado) && (tipo === "TODOS" || q.tipo === tipo)
@@ -115,7 +120,7 @@ export default function PresupuestosPage() {
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatM2(q.m2Total)}</td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatARS(q.total)}</td>
                     <td className="px-4 py-3"><QuoteStatusBadge status={q.estado} /></td>
-                    <td className="px-4 py-3"><div className="flex justify-end gap-2">{q.estado === "BORRADOR" && <><Button size="sm" variant="outline" onClick={async () => { const response = await fetch(`/api/quotes/${q.id}/send`, { method: "POST" }); if (response.ok) setRows((items) => items.map((item) => item.id === q.id ? { ...item, estado: "ENVIADO" } : item)); }}><Send className="h-3.5 w-3.5" /> Enviar</Button><Button size="sm" variant="outline" onClick={async () => { if (!window.confirm("¿Eliminar este borrador?")) return; const response = await fetch(`/api/quotes/${q.id}`, { method: "DELETE" }); if (response.ok) setRows((items) => items.filter((item) => item.id !== q.id)); }}><Trash2 className="h-3.5 w-3.5" /></Button></>}</div></td>
+                    <td className="px-4 py-3"><div className="flex justify-end gap-2">{q.estado === "BORRADOR" && <><Link href={`/presupuestos/${q.id}`}><Button size="sm" variant="outline">Editar</Button></Link><Button size="sm" variant="outline" onClick={() => sendQuote(q.id)}><Send className="h-3.5 w-3.5" /> Enviar</Button><Button size="sm" variant="outline" onClick={() => setDeleteQuote(q)}><Trash2 className="h-3.5 w-3.5" /></Button></>}</div></td>
                   </motion.tr>
                 );
               })}
@@ -123,6 +128,8 @@ export default function PresupuestosPage() {
           </table>
         </Card>
       )}
+      <Modal open={!!deleteQuote} onClose={() => setDeleteQuote(null)} title="Eliminar borrador" description="Esta acción no se puede deshacer." footer={<><Button variant="outline" onClick={() => setDeleteQuote(null)}>Cancelar</Button><Button onClick={removeQuote} className="bg-red-600 hover:bg-red-700">Sí, eliminar</Button></>}><p className="text-sm text-muted-foreground">¿Seguro que querés eliminar el borrador {deleteQuote?.numero}?</p></Modal>
+      <Modal open={!!message} onClose={() => setMessage("")} title="No se pudo completar la acción" footer={<Button onClick={() => setMessage("")}>Entendido</Button>}><p className="text-sm text-muted-foreground">{message}</p></Modal>
     </div>
   );
 }
