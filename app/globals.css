@@ -52,6 +52,8 @@
     font-feature-settings: "cv11", "ss01";
   }
 
+  html { scroll-behavior: smooth; }
+
   ::selection {
     background-color: rgb(22 163 74 / 0.25);
   }
@@ -73,12 +75,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.001ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.001ms !important;
-      scroll-behavior: auto !important;
-    }
+    html { scroll-behavior: auto; }
+    .motion-optional { transition: none !important; animation: none !important; }
   }
 }
 
