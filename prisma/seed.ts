@@ -10,11 +10,20 @@
  * MIGRACION_EXCEL.md) en vez de datos ficticios.
  */
 import { PrismaClient } from "@prisma/client";
+import { randomBytes, scryptSync } from "node:crypto";
 import { clients, priceList } from "../lib/mock-data";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const salt = randomBytes(16).toString("hex");
+  const passwordHash = `${salt}:${scryptSync("Admin1234!", salt, 64).toString("hex")}`;
+  await prisma.user.upsert({
+    where: { email: "admin@vasecrm.com" },
+    update: { active: true, role: "ADMIN" },
+    create: { name: "Administrador Vase CRM", email: "admin@vasecrm.com", passwordHash, role: "ADMIN", active: true },
+  });
+  console.log("Administrador creado: admin@vasecrm.com");
   console.log("Seed de referencia — adaptar a datos reales migrados desde Excel.");
   for (const c of clients) {
     await prisma.client.upsert({
