@@ -6,22 +6,22 @@ import { cn } from "@/lib/utils";
 import { motion, type HTMLMotionProps } from "framer-motion";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-[transform,background-color,border-color,color,box-shadow] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vase-green focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-vase-green text-white hover:bg-vase-green-dark shadow-vase-sm",
+        default: "bg-vase-green text-white shadow-[0_8px_18px_-10px_rgba(22,163,74,.9)] hover:bg-vase-green-dark hover:shadow-[0_12px_24px_-12px_rgba(22,163,74,.9)]",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/70",
-        outline: "border border-border bg-transparent hover:bg-secondary",
+        outline: "border border-border bg-card hover:border-vase-green/35 hover:bg-vase-green-soft/50",
         ghost: "hover:bg-secondary text-foreground",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         link: "text-vase-green underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-8 px-3 text-xs",
+        default: "min-h-11 px-4 py-2",
+        sm: "min-h-9 px-3 text-xs",
         lg: "h-11 px-6 text-base",
-        icon: "h-9 w-9",
+        icon: "h-10 w-10",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
@@ -38,7 +38,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <motion.button
         ref={ref}
         whileTap={{ scale: 0.97 }}
-        whileHover={{ scale: 1.01 }}
+        whileHover={{ y: -1 }}
         transition={{ duration: 0.12 }}
         className={cn(buttonVariants({ variant, size, className }))}
         {...props}

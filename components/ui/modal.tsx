@@ -39,20 +39,20 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            transition={{ duration: 0.14 }}
+            className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
             onClick={onClose}
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            initial={{ opacity: 0, scale: 0.97, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 8 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, scale: 0.985, y: 4 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
             ref={dialogRef}
-            className={`relative z-10 w-full ${sizeMap[size]} rounded-xl border border-border bg-card shadow-vase-lg`}
+            className={`relative z-10 w-full ${sizeMap[size]} overflow-hidden rounded-2xl border border-border bg-card shadow-[0_28px_80px_-32px_rgba(15,23,42,.55)]`}
           >
             <div className="flex items-start justify-between gap-4 border-b border-border p-5">
               <div>
@@ -62,7 +62,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
               <button
                 onClick={onClose}
                 aria-label="Cerrar"
-                className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-vase-green"
               >
                 <X className="h-4 w-4" />
               </button>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
-import { BarChart3, BookText, ClipboardList, Droplets, Factory, FileText, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Receipt, Settings, Tag, Truck, Users, Wallet, X } from "lucide-react";
+import { BarChart3, BookText, ClipboardList, Droplets, Factory, FileText, LayoutDashboard, Receipt, Settings, Tag, Truck, Users, Wallet, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -16,9 +16,9 @@ const nav = [
   { href: "/precios", label: "Precios", icon: Tag }, { href: "/configuracion", label: "Configuración", icon: Settings },
 ];
 
-type SidebarProps = { collapsed: boolean; mobileOpen: boolean; onCloseMobile: () => void; onToggle: () => void };
+type SidebarProps = { collapsed: boolean; mobileOpen: boolean; onCloseMobile: () => void };
 
-export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, mobileOpen, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -34,8 +34,6 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onToggle }: Side
           <motion.div animate={{ opacity: expanded || mobileOpen ? 1 : 0 }} className="min-w-0 whitespace-nowrap"><p className="text-[15px] font-bold tracking-[-0.02em] text-slate-950 dark:text-white">Vase</p><p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">CRM</p></motion.div>
           <button type="button" onClick={onCloseMobile} aria-label="Cerrar menú" className="ml-auto flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-vase-green lg:hidden"><X className="h-5 w-5" /></button>
         </div>
-
-        <button type="button" onClick={onToggle} aria-label={collapsed ? "Fijar menú abierto" : "Compactar menú"} title={collapsed ? "Fijar menú abierto" : "Compactar menú"} className="absolute -right-3 top-[94px] hidden h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-[0_8px_18px_-10px_rgba(15,23,42,.5)] transition-colors hover:border-vase-green/40 hover:text-vase-green focus-visible:ring-2 focus-visible:ring-vase-green dark:border-slate-700 dark:bg-slate-900 lg:flex">{collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}</button>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
           {nav.map((item) => {

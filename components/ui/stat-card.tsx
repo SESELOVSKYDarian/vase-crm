@@ -18,9 +18,9 @@ export function StatCard({ label, value, icon: Icon, trend, accent, index = 0 }:
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.22, delay: Math.min(index, 4) * 0.04, ease: [0.22, 1, 0.36, 1] }}
     >
-      <Card className={cn("p-5", accent && "border-vase-green/30 bg-vase-green-soft/40")}>
+      <Card className={cn("group p-5 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_-26px_rgba(15,23,42,.4)]", accent && "border-vase-green/30 bg-vase-green-soft/40")}>
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -31,7 +31,7 @@ export function StatCard({ label, value, icon: Icon, trend, accent, index = 0 }:
               </p>
             )}
           </div>
-          <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg", accent ? "bg-vase-green text-white" : "bg-secondary text-muted-foreground")}>
+          <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105", accent ? "bg-vase-green text-white" : "bg-secondary text-muted-foreground")}>
             <Icon className="h-4.5 w-4.5" strokeWidth={2} />
           </div>
         </div>
