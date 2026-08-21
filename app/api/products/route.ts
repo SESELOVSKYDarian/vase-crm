@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const parsed = productSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
     const { nombre, categoria, precioM2, precioMl, vigenteDesde } = parsed.data;
-    const duplicate = await prisma.product.findFirst({ where: { nombre: { equals: nombre, mode: "insensitive" }, activo: true } });
+    const duplicate = await prisma.product.findFirst({ where: { nombre: { equals: nombre }, activo: true } });
     if (duplicate) return NextResponse.json({ error: "Ya existe un producto con ese nombre" }, { status: 409 });
     const product = await prisma.product.create({ data: { nombre, categoria, priceItems: { create: { precioM2, precioMl: precioMl === "" || precioMl == null ? undefined : precioMl, priceList: { connectOrCreate: { where: { id: "active-default" }, create: { id: "active-default", nombre: "Lista general", vigenteDesde: new Date(vigenteDesde), activa: true } } } } } }, include: { priceItems: true } });
     return NextResponse.json(product, { status: 201 });
