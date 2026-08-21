@@ -1,0 +1,15 @@
+services:
+  vase-crm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vase-crm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      SEED_DATABASE: ${SEED_DATABASE:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
