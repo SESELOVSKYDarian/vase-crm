@@ -10,7 +10,7 @@ export const userSchema = z.object({
 
 export const productSchema = z.object({
   nombre: z.string().trim().min(2, "Ingresá un nombre válido"),
-  categoria: z.enum(["SIMPLE", "DVH", "TEMPLADO", "PULIDO", "SOLO_CORTE", "DISTRIBUCION"]),
+  categoria: z.string().trim().min(2),
   precioM2: z.coerce.number().positive("Debe ser mayor a cero"),
   precioMl: z.union([z.coerce.number().positive(), z.literal(""), z.null()]).optional(),
   vigenteDesde: z.string().min(1, "Seleccioná una fecha"),

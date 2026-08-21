@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Plus, FileText, Layers } from "lucide-react";
+import { Plus, FileText, Layers, Send, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -17,9 +17,13 @@ export default function PresupuestosPage() {
   const [estado, setEstado] = useState<QuoteStatus | "TODOS">("TODOS");
   const [tipo, setTipo] = useState<QuoteType | "TODOS">("TODOS");
   const [showNew, setShowNew] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const [rows, setRows] = useState<any[]>(quotes);
+  useEffect(() => { fetch("/api/quotes").then((r) => r.ok ? r.json() : null).then((payload) => { if (payload?.data?.length) setRows(payload.data); }).catch(() => {}); }, []);
 
-  const filtered = quotes.filter(
+  const filtered = rows.filter(
     (q) => (estado === "TODOS" || q.estado === estado) && (tipo === "TODOS" || q.tipo === tipo)
+      && (!showDrafts || q.estado === "BORRADOR")
   );
 
   return (
@@ -27,9 +31,9 @@ export default function PresupuestosPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Presupuestos</h1>
-          <p className="text-sm text-muted-foreground">{quotes.length} presupuestos totales</p>
+          <p className="text-sm text-muted-foreground">{rows.length} presupuestos totales</p>
         </div>
-        <div className="relative">
+        <div className="flex items-center gap-2"><Button variant={showDrafts ? "secondary" : "outline"} onClick={() => setShowDrafts((value) => !value)}>Mis borradores</Button><div className="relative">
           <Button onClick={() => setShowNew((v) => !v)}>
             <Plus className="h-4 w-4" /> Nuevo presupuesto
           </Button>
@@ -48,7 +52,7 @@ export default function PresupuestosPage() {
               </Link>
             </motion.div>
           )}
-        </div>
+        </div></div>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -82,11 +86,12 @@ export default function PresupuestosPage() {
                 <th className="px-4 py-3 text-right">m²</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((q, i) => {
-                const client = getClient(q.clienteId);
+                const client = q.client ?? getClient(q.clienteId);
                 return (
                   <motion.tr
                     key={q.id}
@@ -102,7 +107,7 @@ export default function PresupuestosPage() {
                       <p className="text-xs text-muted-foreground">{formatDate(q.fecha)}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium">{client?.razonSocial}</p>
+                      <p className="font-medium">{client?.razonSocial ?? "Cliente"}</p>
                       <p className="text-xs text-muted-foreground">{q.obra}</p>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{q.tipo}</td>
@@ -110,6 +115,7 @@ export default function PresupuestosPage() {
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatM2(q.m2Total)}</td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatARS(q.total)}</td>
                     <td className="px-4 py-3"><QuoteStatusBadge status={q.estado} /></td>
+                    <td className="px-4 py-3"><div className="flex justify-end gap-2">{q.estado === "BORRADOR" && <><Button size="sm" variant="outline" onClick={async () => { const response = await fetch(`/api/quotes/${q.id}/send`, { method: "POST" }); if (response.ok) setRows((items) => items.map((item) => item.id === q.id ? { ...item, estado: "ENVIADO" } : item)); }}><Send className="h-3.5 w-3.5" /> Enviar</Button><Button size="sm" variant="outline" onClick={async () => { if (!window.confirm("¿Eliminar este borrador?")) return; const response = await fetch(`/api/quotes/${q.id}`, { method: "DELETE" }); if (response.ok) setRows((items) => items.filter((item) => item.id !== q.id)); }}><Trash2 className="h-3.5 w-3.5" /></Button></>}</div></td>
                   </motion.tr>
                 );
               })}

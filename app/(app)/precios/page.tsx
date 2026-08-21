@@ -9,7 +9,7 @@ import { Plus, History, Pencil, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
 export default function PreciosPage() {
@@ -21,6 +21,8 @@ export default function PreciosPage() {
   const [form, setForm] = useState({ nombre: "", categoria: "SIMPLE", precioM2: "", precioMl: "", vigenteDesde: new Date().toISOString().slice(0, 10) });
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [categories, setCategories] = useState<string[]>(["SIMPLE", "DVH", "TEMPLADO", "PULIDO", "SOLO_CORTE", "DISTRIBUCION"]);
+  useEffect(() => { fetch("/api/categories").then((r) => r.json()).then((payload) => { if (payload.data?.length) setCategories(payload.data.map((item: { nombre: string }) => item.nombre)); }).catch(() => {}); }, []);
   function startEdit(p: (typeof priceList)[number]) { setEditing(p); setForm({ nombre: p.producto, categoria: p.categoria, precioM2: String(p.precioM2), precioMl: p.precioMl ? String(p.precioMl) : "", vigenteDesde: p.vigenteDesde }); setOpen(true); }
   async function submit(e: React.FormEvent) { e.preventDefault(); setError(""); const payload = { ...form, precioM2: Number(form.precioM2), precioMl: form.precioMl ? Number(form.precioMl) : "" }; const response = await fetch("/api/products", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editing ? { ...payload, id: editing.id } : payload) }); if (!response.ok) { setError((await response.json()).error ?? "No se pudo guardar"); return; } if (editing) setHistory((items) => ({ ...items, [editing.id]: [...(items[editing.id] ?? []), editing] })); setProducts((items) => editing ? items.map((item) => item.id === editing.id ? { ...item, producto: form.nombre, categoria: form.categoria as any, precioM2: Number(form.precioM2), precioMl: form.precioMl ? Number(form.precioMl) : undefined, vigenteDesde: form.vigenteDesde } : item) : [...items, { id: `local-${Date.now()}`, producto: form.nombre, categoria: form.categoria as any, precioM2: Number(form.precioM2), precioMl: form.precioMl ? Number(form.precioMl) : undefined, vigenteDesde: form.vigenteDesde }]); setSaved(true); setTimeout(() => { setOpen(false); setSaved(false); setEditing(null); }, 700); }
   async function remove(id: string) { if (!window.confirm("¿Eliminar este producto de la lista?")) return; const response = await fetch(`/api/products?id=${id}`, { method: "DELETE" }); if (!response.ok) { setError("No se pudo eliminar el producto"); return; } setProducts((items) => items.filter((item) => item.id !== id)); }
@@ -71,7 +73,7 @@ export default function PreciosPage() {
       <Modal open={open} onClose={() => setOpen(false)} title="Nuevo producto" description="Sumá un producto a la lista de precios activa." size="md" footer={<><Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button form="product-form" type="submit" disabled={saved}>{saved ? "Guardado" : "Guardar producto"}</Button></>}>
         <form id="product-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2"><Label htmlFor="product-name">Nombre</Label><Input id="product-name" required value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} placeholder="Ej. Float 8mm" /></div>
-          <div><Label htmlFor="product-category">Categoría</Label><Select id="product-category" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}><option>SIMPLE</option><option>DVH</option><option>TEMPLADO</option><option>PULIDO</option><option>SOLO_CORTE</option><option>DISTRIBUCION</option></Select></div>
+          <div><Label htmlFor="product-category">Categoría</Label><Select id="product-category" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</Select></div>
           <div><Label htmlFor="product-date">Vigente desde</Label><Input id="product-date" type="date" required value={form.vigenteDesde} onChange={(e) => setForm({ ...form, vigenteDesde: e.target.value })} /></div>
           <div><Label htmlFor="product-m2">Precio por m²</Label><Input id="product-m2" type="number" min="0" step="0.01" required value={form.precioM2} onChange={(e) => setForm({ ...form, precioM2: e.target.value })} /></div>
           <div><Label htmlFor="product-ml">Precio por ml (opcional)</Label><Input id="product-ml" type="number" min="0" step="0.01" value={form.precioMl} onChange={(e) => setForm({ ...form, precioMl: e.target.value })} /></div>

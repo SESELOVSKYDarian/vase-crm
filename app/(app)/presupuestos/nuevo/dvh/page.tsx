@@ -43,6 +43,8 @@ function emptyItem(): DvhItemInput {
 }
 
 export default function NuevoPresupuestoDvhPage() {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [clienteId, setClienteId] = useState(clients[0].id);
   const [obra, setObra] = useState("");
   const [fechaEntrega, setFechaEntrega] = useState("");
@@ -64,6 +66,7 @@ export default function NuevoPresupuestoDvhPage() {
     if (!g) return;
     updateItem(id, { [side]: g } as any);
   }
+  async function saveQuote(estado: "BORRADOR" | "ENVIADO") { setSaving(true); setSaveError(""); try { const response = await fetch("/api/quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "DVH", clienteId, obra, fechaEntrega, estado, totals: { cantidad: totals.cantidadTotalUnidades, m2: totals.m2Total, subtotalBruto: totals.subtotalBruto, bonificacion: totals.montoBonificacion, subtotalNeto: totals.subtotalNeto, iva: totals.iva, total: totals.total }, items: computed }) }); if (!response.ok) throw new Error((await response.json()).error ?? "No se pudo guardar"); window.location.href = "/presupuestos"; } catch (error: any) { setSaveError(error.message); } finally { setSaving(false); } }
 
   return (
     <div className="space-y-6 pb-24">
@@ -220,8 +223,9 @@ export default function NuevoPresupuestoDvhPage() {
           </div>
           <div className="flex items-center gap-4">
             <p className="text-lg font-bold tabular-nums">{formatARS(totals.total)}</p>
-            <Button variant="outline">Guardar borrador</Button>
-            <Button>Guardar y enviar</Button>
+            <Button variant="outline" disabled={saving} onClick={() => saveQuote("BORRADOR")}>{saving ? "Guardando…" : "Guardar borrador"}</Button>
+            <Button disabled={saving} onClick={() => saveQuote("ENVIADO")}>Guardar y enviar</Button>
+            {saveError && <p className="w-full text-right text-xs text-red-600">{saveError}</p>}
           </div>
         </div>
       </motion.div>

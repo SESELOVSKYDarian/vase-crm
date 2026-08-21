@@ -1,17 +1,7 @@
-import { Sidebar } from "@/components/layout/sidebar";
-import { Topbar } from "@/components/layout/topbar";
-import { PageTransition } from "@/components/layout/page-transition";
+import { AppShell } from "@/components/layout/app-shell";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex-1 min-w-0 flex flex-col">
-        <Topbar />
-        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8 max-w-[1600px] w-full mx-auto">
-          <PageTransition>{children}</PageTransition>
-        </main>
-      </div>
-    </div>
+    <AppShell>{children}</AppShell>
   );
 }

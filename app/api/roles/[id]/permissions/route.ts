@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requirePermission } from "@/lib/auth";
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) { try { await requirePermission("users.roles.manage"); const { id } = await params; const { permissionIds = [] } = await request.json(); const permissions = await Promise.all(permissionIds.map((key: string) => prisma.permission.upsert({ where: { key }, update: {}, create: { key, module: key.split(".")[0], action: key.split(".").slice(1).join("."), description: key } }))); await prisma.$transaction([prisma.rolePermission.deleteMany({ where: { roleId: id } }), ...permissions.map((permission) => prisma.rolePermission.create({ data: { roleId: id, permissionId: permission.id } }))]); return NextResponse.json({ data: permissions }); } catch { return NextResponse.json({ error: "No se pudieron actualizar los permisos" }, { status: 400 }); } }

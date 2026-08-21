@@ -16,6 +16,9 @@ import { clients, priceList } from "../lib/mock-data";
 const prisma = new PrismaClient();
 
 async function main() {
+  for (const nombre of ["SIMPLE", "DVH", "TEMPLADO", "PULIDO", "SOLO_CORTE", "DISTRIBUCION"]) {
+    await prisma.productCategoryDefinition.upsert({ where: { nombre }, update: { activa: true }, create: { nombre, sistema: true, activa: true } });
+  }
   const salt = randomBytes(16).toString("hex");
   const passwordHash = `${salt}:${scryptSync("Admin1234!", salt, 64).toString("hex")}`;
   await prisma.user.upsert({

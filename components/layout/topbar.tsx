@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck, ChevronDown, FileText, Factory, LogOut, Moon, Receipt, Search, Sun, Truck, UserRound, Users } from "lucide-react";
+import { Bell, CheckCheck, ChevronDown, FileText, Factory, LogOut, Menu, Moon, Receipt, Search, Sun, Truck, UserRound, Users } from "lucide-react";
 import { useTheme } from "@/lib/use-theme";
 
 type ResultGroup = { key: string; label: string; icon: typeof Users; href: (id: string) => string };
 
-export function Topbar() {
+export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -29,6 +29,7 @@ export function Topbar() {
   const initials = (user?.name ?? "Usuario").split(" ").map((part: string) => part[0]).join("").slice(0, 2).toUpperCase();
 
   return <header className="sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-border bg-background/90 px-3 backdrop-blur-xl sm:px-5 lg:px-7">
+    <button onClick={onOpenMenu} aria-label="Abrir menú" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-secondary lg:hidden"><Menu className="h-5 w-5" /></button>
     <div className="relative min-w-0 flex-1 max-w-2xl">
       <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-muted-foreground" />
       <input ref={searchRef} value={query} onChange={(e) => search(e.target.value)} onKeyDown={(e) => { if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); } }} placeholder="Buscar clientes, presupuestos, OT…" aria-label="Buscar en Vase CRM" className="h-10 w-full rounded-xl border border-border bg-card pl-10 pr-20 text-sm shadow-sm outline-none transition-all placeholder:text-muted-foreground focus:border-vase-green focus:ring-4 focus:ring-vase-green/10" />
