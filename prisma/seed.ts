@@ -11,7 +11,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { randomBytes, scryptSync } from "node:crypto";
-import { clients, priceList } from "../lib/mock-data";
+import { clients, priceList, quotes, workOrders } from "../lib/mock-data";
 
 const prisma = new PrismaClient();
 
@@ -28,11 +28,13 @@ async function main() {
   });
   console.log("Administrador creado: admin@vasecrm.com");
   console.log("Seed de referencia — adaptar a datos reales migrados desde Excel.");
+  const seededClients = new Map<string, string>();
   for (const c of clients) {
-    await prisma.client.upsert({
+    const client = await prisma.client.upsert({
       where: { cuit: c.cuit },
       update: {},
       create: {
+        id: c.id,
         codigoCliente: c.codigoCliente,
         razonSocial: c.razonSocial,
         cuit: c.cuit,
@@ -43,6 +45,25 @@ async function main() {
         contacto: c.contacto,
         estado: c.estado as any,
       },
+    });
+    seededClients.set(c.id, client.id);
+  }
+  for (const quote of quotes) {
+    const clientId = seededClients.get(quote.clienteId);
+    if (!clientId) continue;
+    await prisma.quote.upsert({
+      where: { numero: quote.numero },
+      update: {},
+      create: { id: quote.id, numero: quote.numero, tipo: quote.tipo, fecha: new Date(quote.fecha), fechaEntrega: new Date(quote.fechaEntrega), clientId, obra: quote.obra, observaciones: quote.observaciones, estado: quote.estado, tipoFacturacion: quote.tipoFacturacion, cantidadTotal: quote.cantidadTotal, m2Total: quote.m2Total, subtotalBruto: quote.subtotalBruto, montoBonificacion: quote.montoBonificacion, subtotalNeto: quote.subtotalNeto, iva: quote.iva, total: quote.total, items: { create: { productoNombre: quote.tipo === "DVH" ? "DVH" : "Float 4mm", cantidad: quote.cantidadTotal, anchoMm: 1000, altoMm: 1000, precioM2Snapshot: quote.subtotalBruto / Math.max(quote.m2Total, 1), subtotalNeto: quote.subtotalNeto } } },
+    });
+  }
+  for (const order of workOrders.filter((item) => ["ot-2001", "ot-2002", "ot-2004"].includes(item.id))) {
+    const clientId = seededClients.get(order.clienteId);
+    if (!clientId) continue;
+    await prisma.workOrder.upsert({
+      where: { numero: order.numero },
+      update: {},
+      create: { id: order.id, numero: order.numero, quoteId: order.quoteId, clientId, obra: order.obra, categoria: order.categoria, fechaCreacion: new Date(order.fechaCreacion), fechaEntrega: new Date(order.fechaEntrega), prioridad: order.prioridad, porcentajeAvance: order.porcentajeAvance, estadoProductivo: order.estadoProductivo, estadoEntrega: order.estadoEntrega, estadoFacturacion: order.estadoFacturacion, items: { create: { productoNombre: order.tipo, cantidad: order.cantidadTotal, anchoMm: 1000, altoMm: 1000, m2: order.m2Total } } },
     });
   }
   console.log(`Clientes de referencia creados: ${clients.length}`);

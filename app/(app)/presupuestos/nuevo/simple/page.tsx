@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Plus, Trash2, FileText } from "lucide-react";
@@ -13,11 +13,10 @@ import type { SimpleGlassItemInput } from "@/lib/calculations/types";
 import { clients, priceList } from "@/lib/mock-data";
 import { formatARS, formatM2, formatNumber } from "@/lib/format";
 
-let nextId = 1;
 function emptyItem(): SimpleGlassItemInput {
   const p = priceList.find((p) => p.categoria === "SIMPLE")!;
   return {
-    id: String(nextId++),
+    id: crypto.randomUUID(),
     producto: p.producto,
     cantidad: 1,
     anchoMm: 1000,
@@ -33,10 +32,12 @@ function emptyItem(): SimpleGlassItemInput {
 export default function NuevoPresupuestoSimplePage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [availableClients, setAvailableClients] = useState(clients);
   const [clienteId, setClienteId] = useState(clients[0].id);
   const [obra, setObra] = useState("");
   const [fechaEntrega, setFechaEntrega] = useState("");
   const [items, setItems] = useState<SimpleGlassItemInput[]>([emptyItem()]);
+  useEffect(() => { fetch("/api/clients").then((response) => response.ok ? response.json() : null).then((payload) => { if (payload?.data?.length) { setAvailableClients(payload.data); setClienteId(payload.data[0].id); } }).catch(() => {}); }, []);
 
   const simpleProducts = priceList.filter((p) => p.categoria === "SIMPLE" || p.categoria === "TEMPLADO");
 
@@ -56,7 +57,7 @@ export default function NuevoPresupuestoSimplePage() {
     if (!p) return;
     updateItem(id, { producto: p.producto, precioM2: p.precioM2, precioPulidoMl: p.precioMl ?? 0 });
   }
-  async function saveQuote(estado: "BORRADOR" | "ENVIADO") { setSaving(true); setSaveError(""); try { const response = await fetch("/api/quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "SIMPLE", clienteId, obra, fechaEntrega, estado, totals: { cantidad: totals.cantidadTotalVidrios, m2: totals.m2Total, subtotalBruto: totals.subtotalBruto, bonificacion: totals.montoBonificacion, subtotalNeto: totals.subtotalNeto, iva: totals.iva, total: totals.total }, items: computed }) }); if (!response.ok) throw new Error((await response.json()).error ?? "No se pudo guardar"); window.location.href = "/presupuestos"; } catch (error: any) { setSaveError(error.message); } finally { setSaving(false); } }
+  async function saveQuote(estado: "BORRADOR" | "ENVIADO") { setSaveError(""); if (obra.trim().length < 2) { setSaveError("Ingresá el nombre de la obra (mínimo 2 caracteres)."); return; } if (!fechaEntrega) { setSaveError("Seleccioná una fecha de entrega."); return; } setSaving(true); try { const response = await fetch("/api/quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "SIMPLE", clienteId, obra, fechaEntrega, estado, totals: { cantidad: totals.cantidadTotalVidrios, m2: totals.m2Total, subtotalBruto: totals.subtotalBruto, bonificacion: totals.montoBonificacion, subtotalNeto: totals.subtotalNeto, iva: totals.iva, total: totals.total }, items: computed }) }); if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "No se pudo guardar el presupuesto."); window.location.href = "/presupuestos"; } catch (error: any) { setSaveError(error.message); } finally { setSaving(false); } }
 
   return (
     <div className="space-y-6 pb-24">
@@ -79,7 +80,7 @@ export default function NuevoPresupuestoSimplePage() {
           <div>
             <Label>Cliente</Label>
             <Select value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
-              {clients.map((c) => (
+              {availableClients.map((c) => (
                 <option key={c.id} value={c.id}>{c.razonSocial}</option>
               ))}
             </Select>
@@ -94,7 +95,7 @@ export default function NuevoPresupuestoSimplePage() {
           </div>
           <div>
             <Label>Código cliente</Label>
-            <Input value={clients.find((c) => c.id === clienteId)?.codigoCliente ?? ""} disabled />
+            <Input value={availableClients.find((c) => c.id === clienteId)?.codigoCliente ?? ""} disabled />
           </div>
         </div>
       </Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Plus, Trash2, Layers } from "lucide-react";
@@ -21,10 +21,9 @@ const GLASS_OPTIONS = [
   { tipo: "Templado 6mm", espesorMm: 6, precioM2: 28900 },
 ];
 
-let nextId = 1;
 function emptyItem(): DvhItemInput {
   return {
-    id: String(nextId++),
+    id: crypto.randomUUID(),
     composicion: "4/12/4",
     vidrioExterior: GLASS_OPTIONS[0],
     vidrioInterior: GLASS_OPTIONS[0],
@@ -45,10 +44,12 @@ function emptyItem(): DvhItemInput {
 export default function NuevoPresupuestoDvhPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [availableClients, setAvailableClients] = useState(clients);
   const [clienteId, setClienteId] = useState(clients[0].id);
   const [obra, setObra] = useState("");
   const [fechaEntrega, setFechaEntrega] = useState("");
   const [items, setItems] = useState<DvhItemInput[]>([emptyItem()]);
+  useEffect(() => { fetch("/api/clients").then((response) => response.ok ? response.json() : null).then((payload) => { if (payload?.data?.length) { setAvailableClients(payload.data); setClienteId(payload.data[0].id); } }).catch(() => {}); }, []);
 
   const { items: computed, totals } = useMemo(() => computeDvhQuote(items), [items]);
 
@@ -66,7 +67,7 @@ export default function NuevoPresupuestoDvhPage() {
     if (!g) return;
     updateItem(id, { [side]: g } as any);
   }
-  async function saveQuote(estado: "BORRADOR" | "ENVIADO") { setSaving(true); setSaveError(""); try { const response = await fetch("/api/quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "DVH", clienteId, obra, fechaEntrega, estado, totals: { cantidad: totals.cantidadTotalUnidades, m2: totals.m2Total, subtotalBruto: totals.subtotalBruto, bonificacion: totals.montoBonificacion, subtotalNeto: totals.subtotalNeto, iva: totals.iva, total: totals.total }, items: computed }) }); if (!response.ok) throw new Error((await response.json()).error ?? "No se pudo guardar"); window.location.href = "/presupuestos"; } catch (error: any) { setSaveError(error.message); } finally { setSaving(false); } }
+  async function saveQuote(estado: "BORRADOR" | "ENVIADO") { setSaveError(""); if (obra.trim().length < 2) { setSaveError("Ingresá el nombre de la obra (mínimo 2 caracteres)."); return; } if (!fechaEntrega) { setSaveError("Seleccioná una fecha de entrega."); return; } setSaving(true); try { const response = await fetch("/api/quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "DVH", clienteId, obra, fechaEntrega, estado, totals: { cantidad: totals.cantidadTotalUnidades, m2: totals.m2Total, subtotalBruto: totals.subtotalBruto, bonificacion: totals.montoBonificacion, subtotalNeto: totals.subtotalNeto, iva: totals.iva, total: totals.total }, items: computed }) }); if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "No se pudo guardar el presupuesto."); window.location.href = "/presupuestos"; } catch (error: any) { setSaveError(error.message); } finally { setSaving(false); } }
 
   return (
     <div className="space-y-6 pb-24">
@@ -89,7 +90,7 @@ export default function NuevoPresupuestoDvhPage() {
           <div>
             <Label>Cliente</Label>
             <Select value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
-              {clients.map((c) => (
+              {availableClients.map((c) => (
                 <option key={c.id} value={c.id}>{c.razonSocial}</option>
               ))}
             </Select>
@@ -104,7 +105,7 @@ export default function NuevoPresupuestoDvhPage() {
           </div>
           <div>
             <Label>Código cliente</Label>
-            <Input value={clients.find((c) => c.id === clienteId)?.codigoCliente ?? ""} disabled />
+            <Input value={availableClients.find((c) => c.id === clienteId)?.codigoCliente ?? ""} disabled />
           </div>
         </div>
       </Card>

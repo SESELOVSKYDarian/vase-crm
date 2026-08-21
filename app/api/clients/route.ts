@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const schema = z.object({ razonSocial: z.string().trim().min(2), cuit: z.string().trim().min(6), condicionIva: z.enum(["RESPONSABLE_INSCRIPTO", "MONOTRIBUTO", "EXENTO", "CONSUMIDOR_FINAL"]), domicilio: z.string().trim().min(2), telefono: z.string().optional(), email: z.string().email().optional().or(z.literal("")), contacto: z.string().optional() });
+export async function GET() { try { return NextResponse.json({ data: await prisma.client.findMany({ where: { estado: "ACTIVO" }, orderBy: { razonSocial: "asc" } }) }); } catch { return NextResponse.json({ error: "No se pudieron cargar los clientes" }, { status: 500 }); } }
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Revisá los datos" }, { status: 400 });

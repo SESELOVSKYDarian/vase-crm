@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -21,9 +21,11 @@ const COLUMNS: { key: WorkOrderStatus; label: string }[] = [
 export default function ProduccionPage() {
   const [query, setQuery] = useState("");
   const [categoria, setCategoria] = useState("TODAS");
-  const [orders, setOrders] = useState(workOrders);
+  const [orders, setOrders] = useState<any[]>(workOrders);
   const [saving, setSaving] = useState<string | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => { fetch("/api/work-orders").then((response) => response.ok ? response.json() : null).then((payload) => { if (payload?.data?.length) setOrders(payload.data); }).catch(() => {}); }, []);
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
@@ -41,7 +43,7 @@ export default function ProduccionPage() {
     try {
       const response = await fetch(`/api/work-orders/${id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
       if (!response.ok) throw new Error();
-    } catch { setOrders(previous); }
+    } catch { setOrders(previous); setError("No se pudo mover la orden. Verificá que tu usuario tenga permiso."); }
     finally { setSaving(null); setDragged(null); }
   }
 
@@ -63,6 +65,7 @@ export default function ProduccionPage() {
           <option value="TEMPLADO">Templado</option>
         </Select>
       </div>
+      {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {COLUMNS.map((col) => {
