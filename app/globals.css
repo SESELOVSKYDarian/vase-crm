@@ -98,3 +98,5 @@
   .page-title { @apply text-2xl font-bold tracking-[-0.035em] text-foreground sm:text-[28px]; }
   .page-subtitle { @apply mt-1 max-w-2xl text-sm leading-6 text-muted-foreground; }
 }
+
+@keyframes loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
