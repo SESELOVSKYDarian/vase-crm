@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Vase CRM",
-  icons: { icon: "/VaseCRM.jpg", shortcut: "/VaseCRM.jpg", apple: "/VaseCRM.jpg" },
+  icons: { icon: "/VaseCRM.png", shortcut: "/VaseCRM.png", apple: "/VaseCRM.png" },
   description: "Sistema integral de gestión — presupuestos, producción, entregas, facturación y cobranzas.",
 };
 
