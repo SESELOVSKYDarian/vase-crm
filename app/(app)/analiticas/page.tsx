@@ -1,114 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { formatARS } from "@/lib/format";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  Legend,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LineChart, Line } from "recharts";
 
-const porCategoria = [
-  { categoria: "Simple", A: 1_820_000, N: 158_400 },
-  { categoria: "DVH", A: 9_300_000, N: 0 },
-  { categoria: "Templado", A: 640_000, N: 0 },
-  { categoria: "Pulido", A: 210_000, N: 40_000 },
-];
-
-const cobranzaPorMetodo = [
-  { metodo: "Transferencia", monto: 1_650_000 },
-  { metodo: "Efectivo", monto: 380_000 },
-  { metodo: "Dólares", monto: 2_700_000 },
-  { metodo: "Cheque físico", monto: 210_000 },
-  { metodo: "E-cheq", monto: 95_000 },
-];
-
-const productivas = [
-  { mes: "May", generadas: 12, terminadas: 10 },
-  { mes: "Jun", generadas: 15, terminadas: 13 },
-  { mes: "Jul", generadas: 18, terminadas: 14 },
-  { mes: "Ago", generadas: 9, terminadas: 4 },
-];
+type Data = { kpis: Record<string, number>; monthly: any[]; production: any[]; paymentsByMethod: any[]; categoryMix: any[] };
+const money = (v: number) => formatARS(v);
+const Empty = ({ text = "No hay datos para este período" }: { text?: string }) => <div className="flex h-full min-h-[260px] items-center justify-center text-sm text-muted-foreground">{text}</div>;
 
 export default function AnaliticasPage() {
-  const [filtro, setFiltro] = useState("TODOS");
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Analíticas</h1>
-          <p className="text-sm text-muted-foreground">Comerciales, de cobranza, financieras y productivas</p>
-        </div>
-        <Tabs value={filtro} onChange={setFiltro} tabs={[{ value: "TODOS", label: "Todos" }, { value: "A", label: "Tipo A" }, { value: "N", label: "Tipo N" }]} />
-      </div>
-
+  const [tipo, setTipo] = useState("TODOS");
+  const [from, setFrom] = useState(""); const [to, setTo] = useState("");
+  const [data, setData] = useState<Data | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  useEffect(() => { const d = new Date(); const f = new Date(d.getFullYear(), d.getMonth() - 5, 1); const iso = (x: Date) => x.toISOString().slice(0, 10); setFrom(iso(f)); setTo(iso(d)); }, []);
+  useEffect(() => { if (!from || !to) return; let alive = true; setLoading(true); setError(""); fetch(`/api/analytics?from=${from}&to=${to}&tipo=${tipo}`).then(async r => { const body = await r.json(); if (!r.ok) throw new Error(body.error || "No se pudieron cargar las analíticas"); return body.data; }).then(d => alive && setData(d)).catch(e => alive && setError(e.message)).finally(() => alive && setLoading(false)); return () => { alive = false; }; }, [from, to, tipo]);
+  const k = data?.kpis;
+  const cards = [["Presupuestado", k?.presupuestado], ["Facturado", k?.facturado], ["Cobrado", k?.cobrado], ["Pendiente de cobro", k?.pendienteCobro], ["OT activas", k?.otsActivas], ["m² en producción", k?.m2EnProduccion]];
+  return <div className="space-y-6">
+    <div className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-xl font-bold tracking-tight">Analíticas</h1><p className="text-sm text-muted-foreground">Indicadores reales de Prisma/MySQL · período seleccionado</p></div><div className="flex flex-wrap items-end gap-2"><label className="text-xs text-muted-foreground">Desde<input type="date" value={from} onChange={e => setFrom(e.target.value)} className="mt-1 block h-10 rounded-lg border bg-background px-3 text-sm" /></label><label className="text-xs text-muted-foreground">Hasta<input type="date" value={to} onChange={e => setTo(e.target.value)} className="mt-1 block h-10 rounded-lg border bg-background px-3 text-sm" /></label><Tabs value={tipo} onChange={setTipo} tabs={[{ value: "TODOS", label: "Todos" }, { value: "A", label: "Tipo A" }, { value: "N", label: "Tipo N" }]} /></div></div>
+    {error ? <Card><CardContent className="p-6 text-sm text-red-600">{error}</CardContent></Card> : <><div className="grid grid-cols-2 gap-3 lg:grid-cols-6">{cards.map(([label, value]) => <Card key={String(label)}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-lg font-semibold">{loading ? "—" : typeof value === "number" && /Presupuestado|Facturado|Cobrado|Pendiente/.test(String(label)) ? money(value) : value}</p></CardContent></Card>)}</div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Presupuestado por categoría (A vs. N)</CardTitle>
-            <CardDescription>ARS del mes en curso</CardDescription>
-          </CardHeader>
-          <CardContent className="h-80 min-h-[300px] pt-2">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
-              <BarChart data={porCategoria} margin={{ left: -10 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="categoria" fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-                <YAxis fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip formatter={(v: number) => formatARS(v)} contentStyle={{ borderRadius: 10, border: "1px solid hsl(var(--border))", fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="A" name="Tipo A" fill="#16A34A" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="N" name="Tipo N" fill="#09090B" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Cobranza por método de pago</CardTitle>
-            <CardDescription>ARS equivalentes, mes en curso</CardDescription>
-          </CardHeader>
-          <CardContent className="h-80 min-h-[300px] pt-2">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
-              <BarChart data={cobranzaPorMetodo} layout="vertical" margin={{ left: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                <XAxis type="number" fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-                <YAxis type="category" dataKey="metodo" fontSize={12} width={110} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip formatter={(v: number) => formatARS(v)} contentStyle={{ borderRadius: 10, border: "1px solid hsl(var(--border))", fontSize: 12 }} />
-                <Bar dataKey="monto" fill="#16A34A" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>OT generadas vs. terminadas</CardTitle>
-            <CardDescription>Últimos 4 meses</CardDescription>
-          </CardHeader>
-          <CardContent className="h-80 min-h-[300px] pt-2">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
-              <BarChart data={productivas} margin={{ left: -10 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="mes" fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-                <YAxis fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid hsl(var(--border))", fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="generadas" name="Generadas" fill="#86EFAC" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="terminadas" name="Terminadas" fill="#16A34A" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
+        <Card><CardHeader><CardTitle>Presupuestado, facturado y cobrado</CardTitle><CardDescription>Evolución mensual en ARS</CardDescription></CardHeader><CardContent className="h-[340px] min-h-[340px]">{loading ? <Empty text="Cargando datos…" /> : !data?.monthly.length ? <Empty /> : <ResponsiveContainer width="100%" height={300}><LineChart data={data.monthly}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" /><YAxis tickFormatter={v => `${Math.round(v / 1000000)}M`} /><Tooltip formatter={(v: number) => money(v)} /><Legend /><Line type="monotone" dataKey="presupuestado" name="Presupuestado" stroke="#16a34a" strokeWidth={3} /><Line type="monotone" dataKey="facturado" name="Facturado" stroke="#0f766e" strokeWidth={2} /><Line type="monotone" dataKey="cobrado" name="Cobrado" stroke="#172554" strokeWidth={2} /></LineChart></ResponsiveContainer>}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Órdenes por estado</CardTitle><CardDescription>Estado productivo de las OT creadas</CardDescription></CardHeader><CardContent className="h-[340px] min-h-[340px]">{loading ? <Empty text="Cargando datos…" /> : !data?.production.length ? <Empty /> : <ResponsiveContainer width="100%" height={300}><BarChart data={data.production}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="count" name="OT" fill="#16a34a" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer>}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Cobros por medio</CardTitle><CardDescription>Equivalente en pesos argentinos</CardDescription></CardHeader><CardContent className="h-[340px] min-h-[340px]">{loading ? <Empty text="Cargando datos…" /> : !data?.paymentsByMethod.length ? <Empty /> : <ResponsiveContainer width="100%" height={300}><BarChart data={data.paymentsByMethod} layout="vertical" margin={{ left: 20, right: 20 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={v => `${Math.round(v / 1000000)}M`} /><YAxis type="category" dataKey="label" width={120} /><Tooltip formatter={(v: number) => money(v)} /><Bar dataKey="amount" name="Cobrado" fill="#0f766e" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer>}</CardContent></Card>
+        <Card><CardHeader><CardTitle>m² por categoría</CardTitle><CardDescription>Superficie asociada a órdenes del período</CardDescription></CardHeader><CardContent className="h-[340px] min-h-[340px]">{loading ? <Empty text="Cargando datos…" /> : !data?.categoryMix.length ? <Empty /> : <ResponsiveContainer width="100%" height={300}><BarChart data={data.categoryMix}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="category" /><YAxis /><Tooltip formatter={(v: number) => `${v.toFixed(2)} m²`} /><Bar dataKey="m2" name="m²" fill="#86efac" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer>}</CardContent></Card>
+      </div></>}
+  </div>;
 }
+
