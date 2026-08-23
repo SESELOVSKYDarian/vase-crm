@@ -6,3 +6,10 @@ dist
 .env.local
 *.log
 .DS_Store
+
+# Herramientas locales de Codex y skills: no forman parte del proyecto
+.codex/
+.agents/
+skills-lock.json
+design-system/
+*.tsbuildinfo
