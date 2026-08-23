@@ -10,14 +10,14 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   description?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   footer?: React.ReactNode;
   size?: "sm" | "md" | "lg";
 }
 
 const sizeMap = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl" };
 
-export function Modal({ open, onClose, title, description, children, footer, size = "md" }: ModalProps) {
+export function Modal({ open, onClose, title, description, children = null, footer, size = "md" }: ModalProps) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
