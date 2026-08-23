@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 
-const updateSchema = z.object({ obra: z.string().trim().min(2).optional(), fechaEntrega: z.string().min(1).optional(), observaciones: z.string().max(500).nullable().optional() });
+const updateSchema = z.object({ obra: z.string().trim().optional(), fechaEntrega: z.string().min(1).optional(), observaciones: z.string().max(500).nullable().optional() });
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const quote = await prisma.quote.findUnique({ where: { id: (await params).id }, include: { items: true, client: true, workOrder: true } });
