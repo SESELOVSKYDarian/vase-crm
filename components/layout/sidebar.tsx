@@ -6,7 +6,6 @@ import { motion, useReducedMotion } from "framer-motion";
 import { BarChart3, BookText, ClipboardList, Droplets, Factory, FileText, LayoutDashboard, Receipt, Settings, Tag, Truck, Users, Wallet, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }, { href: "/clientes", label: "Clientes", icon: Users },
@@ -31,7 +30,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }: SidebarProps) 
     <aside className={cn("relative z-50 shrink-0", collapsed ? "lg:w-[76px]" : "lg:w-[280px]")} aria-label="Navegación principal">
       <motion.div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} initial={false} animate={{ width: mobileOpen || !collapsed ? 280 : width }} transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 360, damping: 34, mass: 0.7 }} className={cn("fixed inset-y-0 left-0 z-50 flex h-[100dvh] flex-col overflow-hidden border-r border-slate-200/80 bg-white shadow-[12px_0_40px_-26px_rgba(15,23,42,.42)] dark:border-slate-800 dark:bg-slate-950 lg:sticky lg:top-0 lg:translate-x-0", mobileOpen ? "translate-x-0" : "-translate-x-full")}>
         <div className="flex h-[76px] shrink-0 items-center gap-3 border-b border-slate-200/80 px-[18px] dark:border-slate-800">
-          <motion.div whileHover={reduceMotion ? undefined : { scale: 1.04, rotate: -4 }} className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[13px] bg-vase-green shadow-[0_10px_22px_-12px_rgba(22,163,74,.85)]"><Image src="/VaseCRM.png" alt="Vase CRM" fill sizes="40px" className="object-cover dark:hidden" /><Image src="/VaseCRM-blanco.png" alt="Vase CRM" fill sizes="40px" className="hidden object-contain p-1 dark:block" /></motion.div>
+          <motion.div whileHover={reduceMotion ? undefined : { scale: 1.04, rotate: -4 }} className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[13px] bg-vase-green shadow-[0_10px_22px_-12px_rgba(22,163,74,.85)]"><img src="/VaseCRM.png" alt="Vase CRM" className="h-full w-full object-cover dark:hidden" /><img src="/VaseCRM-blanco.png" alt="Vase CRM" className="hidden h-full w-full object-contain p-1 dark:block" /></motion.div>
           <motion.div animate={{ opacity: expanded || mobileOpen ? 1 : 0 }} className="min-w-0 whitespace-nowrap"><p className="text-[15px] font-bold tracking-[-0.02em] text-slate-950 dark:text-white">Vase</p><p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">CRM</p></motion.div>
           <button type="button" onClick={onCloseMobile} aria-label="Cerrar menú" className="ml-auto flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-vase-green lg:hidden"><X className="h-5 w-5" /></button>
         </div>
