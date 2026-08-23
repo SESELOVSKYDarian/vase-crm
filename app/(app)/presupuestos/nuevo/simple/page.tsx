@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Plus, Trash2, FileText } from "lucide-react";
@@ -13,10 +13,10 @@ import type { SimpleGlassItemInput } from "@/lib/calculations/types";
 import { clients, priceList } from "@/lib/mock-data";
 import { formatARS, formatM2, formatNumber } from "@/lib/format";
 
-function emptyItem(): SimpleGlassItemInput {
+function emptyItem(id: string): SimpleGlassItemInput {
   const p = priceList.find((p) => p.categoria === "SIMPLE")!;
   return {
-    id: crypto.randomUUID(),
+    id,
     producto: p.producto,
     cantidad: 1,
     anchoMm: 1000,
@@ -36,7 +36,8 @@ export default function NuevoPresupuestoSimplePage() {
   const [clienteId, setClienteId] = useState(clients[0].id);
   const [obra, setObra] = useState("");
   const [fechaEntrega, setFechaEntrega] = useState("");
-  const [items, setItems] = useState<SimpleGlassItemInput[]>([emptyItem()]);
+  const nextItemId = useRef(2);
+  const [items, setItems] = useState<SimpleGlassItemInput[]>([emptyItem("item-1")]);
   useEffect(() => { fetch("/api/clients").then((response) => response.ok ? response.json() : null).then((payload) => { if (payload?.data?.length) { setAvailableClients(payload.data); setClienteId(payload.data[0].id); } }).catch(() => {}); }, []);
 
   const simpleProducts = priceList.filter((p) => p.categoria === "SIMPLE" || p.categoria === "TEMPLADO");
@@ -47,7 +48,7 @@ export default function NuevoPresupuestoSimplePage() {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
   function addItem() {
-    setItems((prev) => [...prev, emptyItem()]);
+    setItems((prev) => [...prev, emptyItem(`item-${nextItemId.current++}`)]);
   }
   function removeItem(id: string) {
     setItems((prev) => (prev.length > 1 ? prev.filter((it) => it.id !== id) : prev));

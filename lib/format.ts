@@ -29,7 +29,7 @@ export function formatM2(value: number): string {
 
 export function formatDate(value: string | Date): string {
   const d = typeof value === "string" ? new Date(value) : value;
-  return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Argentina/Buenos_Aires" }).format(d);
 }
 
 export function formatDateTime(value: string | Date): string {
@@ -40,5 +40,6 @@ export function formatDateTime(value: string | Date): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Argentina/Buenos_Aires",
   }).format(d);
 }

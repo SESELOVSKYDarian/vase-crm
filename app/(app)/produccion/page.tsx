@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { WorkOrderStatusBadge } from "@/components/shared/status-badges";
-import { workOrders, getClient } from "@/lib/mock-data";
 import { formatDate, formatM2 } from "@/lib/format";
 import type { WorkOrderStatus } from "@/types";
 import { Layers, FileText, GripVertical, Check, Loader2 } from "lucide-react";
@@ -21,15 +20,15 @@ const COLUMNS: { key: WorkOrderStatus; label: string }[] = [
 export default function ProduccionPage() {
   const [query, setQuery] = useState("");
   const [categoria, setCategoria] = useState("TODAS");
-  const [orders, setOrders] = useState<any[]>(workOrders);
+  const [orders, setOrders] = useState<any[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => { fetch("/api/work-orders").then((response) => response.ok ? response.json() : null).then((payload) => { if (payload?.data?.length) setOrders(payload.data); }).catch(() => {}); }, []);
+  useEffect(() => { fetch("/api/work-orders").then((response) => response.ok ? response.json() : null).then((payload) => setOrders(payload?.data ?? [])).catch(() => setOrders([])); }, []);
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
-      const client = getClient(o.clienteId);
+      const client = o.client;
       const matchesQuery = [o.numero, o.obra, client?.razonSocial].join(" ").toLowerCase().includes(query.toLowerCase());
       const matchesCategoria = categoria === "TODAS" || o.categoria === categoria;
       return matchesQuery && matchesCategoria;
@@ -79,7 +78,7 @@ export default function ProduccionPage() {
               <div className={`space-y-3 min-h-[120px] rounded-xl p-1 transition-colors ${dragged ? "bg-vase-green-soft/50" : ""}`} onDragOver={(e) => e.preventDefault()} onDrop={() => dragged && moveOrder(dragged, col.key)}>
                 <AnimatePresence>
                   {items.map((o, i) => {
-                    const client = getClient(o.clienteId);
+                    const client = o.client;
                     const atrasada = new Date(o.fechaEntrega) < today && o.estadoProductivo !== "TERMINADA";
                     return (
                       <motion.div
@@ -113,7 +112,7 @@ export default function ProduccionPage() {
                             />
                           </div>
                           <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                            <span>{o.porcentajeAvance}% · {formatM2(o.m2Total)}</span>
+                            <span>{o.porcentajeAvance}% · {formatM2(o.items?.reduce((sum: number, item: any) => sum + Number(item.m2 ?? 0), 0) ?? 0)}</span>
                             <span>Entrega {formatDate(o.fechaEntrega)}</span>
                           </div>
                           {o.operario && <p className="mt-1.5 text-[11px] text-muted-foreground">Operario: {o.operario}</p>}

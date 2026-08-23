@@ -10,7 +10,6 @@ import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { QuoteStatusBadge, TipoFacturacionBadge } from "@/components/shared/status-badges";
 import { EmptyState } from "@/components/ui/empty-state";
-import { quotes, getClient } from "@/lib/mock-data";
 import { formatARS, formatDate, formatM2 } from "@/lib/format";
 import type { QuoteStatus, QuoteType } from "@/types";
 
@@ -19,10 +18,10 @@ export default function PresupuestosPage() {
   const [tipo, setTipo] = useState<QuoteType | "TODOS">("TODOS");
   const [showNew, setShowNew] = useState(false);
   const [showDrafts, setShowDrafts] = useState(false);
-  const [rows, setRows] = useState<any[]>(quotes);
+  const [rows, setRows] = useState<any[]>([]);
   const [deleteQuote, setDeleteQuote] = useState<any | null>(null);
   const [message, setMessage] = useState("");
-  useEffect(() => { fetch("/api/quotes").then((r) => r.ok ? r.json() : null).then((payload) => { if (payload?.data) setRows(payload.data); }).catch(() => {}); }, []);
+  useEffect(() => { fetch("/api/quotes").then((r) => r.ok ? r.json() : null).then((payload) => setRows(payload?.data ?? [])).catch(() => setRows([])); }, []);
   async function sendQuote(id: string) { const response = await fetch(`/api/quotes/${id}/send`, { method: "POST" }); if (response.ok) setRows((items) => items.map((item) => item.id === id ? { ...item, estado: "ENVIADO" } : item)); else setMessage((await response.json().catch(() => null))?.error ?? "No se pudo enviar el presupuesto"); }
   async function removeQuote() { if (!deleteQuote) return; const response = await fetch(`/api/quotes/${deleteQuote.id}`, { method: "DELETE" }); if (response.ok) setRows((items) => items.filter((item) => item.id !== deleteQuote.id)); else setMessage("No se pudo eliminar el borrador"); setDeleteQuote(null); }
 
@@ -96,7 +95,7 @@ export default function PresupuestosPage() {
             </thead>
             <tbody>
               {filtered.map((q, i) => {
-                const client = q.client ?? getClient(q.clienteId);
+                const client = q.client;
                 return (
                   <motion.tr
                     key={q.id}

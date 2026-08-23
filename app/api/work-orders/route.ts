@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
   try {
     const orders = await prisma.workOrder.findMany({ include: { client: true, items: true, deliveries: true }, orderBy: { fechaEntrega: "asc" } });
     return NextResponse.json({ data: orders.map((order) => ({ ...order, cantidadTotal: order.items.reduce((sum, item) => sum + item.cantidad, 0), cantidadEntregada: order.deliveries.reduce((sum, delivery) => sum + delivery.cantidadEntregada, 0) })) });

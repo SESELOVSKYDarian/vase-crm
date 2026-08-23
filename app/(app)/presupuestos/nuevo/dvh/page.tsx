@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Plus, Trash2, Layers } from "lucide-react";
@@ -21,9 +21,9 @@ const GLASS_OPTIONS = [
   { tipo: "Templado 6mm", espesorMm: 6, precioM2: 28900 },
 ];
 
-function emptyItem(): DvhItemInput {
+function emptyItem(id: string): DvhItemInput {
   return {
-    id: crypto.randomUUID(),
+    id,
     composicion: "4/12/4",
     vidrioExterior: GLASS_OPTIONS[0],
     vidrioInterior: GLASS_OPTIONS[0],
@@ -48,7 +48,8 @@ export default function NuevoPresupuestoDvhPage() {
   const [clienteId, setClienteId] = useState(clients[0].id);
   const [obra, setObra] = useState("");
   const [fechaEntrega, setFechaEntrega] = useState("");
-  const [items, setItems] = useState<DvhItemInput[]>([emptyItem()]);
+  const nextItemId = useRef(2);
+  const [items, setItems] = useState<DvhItemInput[]>([emptyItem("item-1")]);
   useEffect(() => { fetch("/api/clients").then((response) => response.ok ? response.json() : null).then((payload) => { if (payload?.data?.length) { setAvailableClients(payload.data); setClienteId(payload.data[0].id); } }).catch(() => {}); }, []);
 
   const { items: computed, totals } = useMemo(() => computeDvhQuote(items), [items]);
@@ -57,7 +58,7 @@ export default function NuevoPresupuestoDvhPage() {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
   function addItem() {
-    setItems((prev) => [...prev, emptyItem()]);
+    setItems((prev) => [...prev, emptyItem(`item-${nextItemId.current++}`)]);
   }
   function removeItem(id: string) {
     setItems((prev) => (prev.length > 1 ? prev.filter((it) => it.id !== id) : prev));

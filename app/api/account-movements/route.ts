@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
+export async function GET(request: Request) { const user = await getCurrentUser(); if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 }); const clientId = new URL(request.url).searchParams.get("clientId"); try { const movements = await prisma.accountMovement.findMany({ where: clientId ? { clientId } : undefined, include: { client: { select: { razonSocial: true, codigoCliente: true } } }, orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] }); const totals = movements.reduce((acc, movement) => ({ debe: acc.debe + Number(movement.debe), haber: acc.haber + Number(movement.haber) }), { debe: 0, haber: 0 }); return NextResponse.json({ data: movements, balance: totals.debe - totals.haber }); } catch { return NextResponse.json({ error: "No se pudo cargar la cuenta corriente" }, { status: 500 }); } }

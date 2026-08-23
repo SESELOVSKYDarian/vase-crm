@@ -1,200 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { notFound, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, CheckCircle2, Building2, Layers } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { QuoteStatusBadge, TipoFacturacionBadge, WorkOrderStatusBadge } from "@/components/shared/status-badges";
 import { formatARS, formatDate, formatM2 } from "@/lib/format";
-import { getQuote, getClient, getWorkOrder } from "@/lib/mock-data";
 
 export default function QuoteDetailPage({ params }: { params: { id: string } }) {
-  const quote = getQuote(params.id);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [generated, setGenerated] = useState(false);
-  const router = useRouter();
-
-  if (!quote) return notFound();
-  const client = getClient(quote.clienteId);
-  const existingOt = quote.workOrderId ? getWorkOrder(quote.workOrderId) : undefined;
-
-  return (
-    <div className="space-y-6">
-      <Link href="/presupuestos" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3.5 w-3.5" /> Volver a presupuestos
-      </Link>
-
-      {/* Traceability chain */}
-      <Card className="p-4 overflow-x-auto">
-        <div className="flex items-center gap-2 min-w-max text-xs font-medium">
-          <TraceNode label="Cliente" active href={`/clientes/${client?.id}`} />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <TraceNode label={`Presupuesto ${quote.numero}`} active current />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <TraceNode label={existingOt ? existingOt.numero : "OT"} active={!!existingOt} href={existingOt ? `/produccion?ot=${existingOt.id}` : undefined} />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <TraceNode label="Corte" active={!!existingOt} />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          {quote.tipo === "DVH" && (
-            <>
-              <TraceNode label="Armado" active={!!existingOt} />
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            </>
-          )}
-          <TraceNode label="Entrega" active={!!existingOt && existingOt.cantidadEntregada > 0} href="/entregas" />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <TraceNode label="Remito" href="/remitos" />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <TraceNode label="Factura" href="/facturacion" />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <TraceNode label="Cobro" href="/cobros" />
-        </div>
-      </Card>
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-vase-green-soft text-vase-green-dark">
-            {quote.tipo === "DVH" ? <Layers className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">{quote.numero}</h1>
-            <p className="text-sm text-muted-foreground">{client?.razonSocial} · {quote.obra}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <TipoFacturacionBadge tipo={quote.tipoFacturacion} />
-          <QuoteStatusBadge status={quote.estado} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 p-5">
-          <p className="text-xs font-semibold text-muted-foreground mb-3">Detalle del presupuesto</p>
-          <dl className="grid grid-cols-2 gap-y-3 text-sm sm:grid-cols-3">
-            <Field label="Fecha" value={formatDate(quote.fecha)} />
-            <Field label="Fecha de entrega" value={formatDate(quote.fechaEntrega)} />
-            <Field label="Tipo" value={quote.tipo} />
-            <Field label="Cantidad" value={String(quote.cantidadTotal)} />
-            <Field label="m² total" value={formatM2(quote.m2Total)} />
-            <Field label="CUIT cliente" value={client?.cuit ?? "—"} />
-          </dl>
-          {quote.observaciones && (
-            <p className="mt-4 rounded-md bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">{quote.observaciones}</p>
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <p className="text-xs font-semibold text-muted-foreground mb-3">Totales</p>
-          <div className="space-y-2 text-sm">
-            <TotalRow label="Subtotal bruto" value={quote.subtotalBruto} />
-            <TotalRow label="Bonificación" value={-quote.montoBonificacion} negative />
-            <TotalRow label="Subtotal neto" value={quote.subtotalNeto} bold />
-            <TotalRow label="IVA (21%)" value={quote.iva} />
-            <div className="border-t border-border pt-2">
-              <TotalRow label="Total" value={quote.total} big />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {existingOt ? (
-        <Card className="flex items-center justify-between p-5">
-          <div>
-            <p className="text-sm font-semibold">Orden de trabajo generada</p>
-            <p className="text-xs text-muted-foreground">{existingOt.numero} · avance {existingOt.porcentajeAvance}%</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <WorkOrderStatusBadge status={existingOt.estadoProductivo} />
-            <Link href={`/produccion?ot=${existingOt.id}`}>
-              <Button variant="outline" size="sm">Ver en producción</Button>
-            </Link>
-          </div>
-        </Card>
-      ) : quote.estado === "APROBADO" ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-5 border-vase-green/30 bg-vase-green-soft/30">
-          <div>
-            <p className="text-sm font-semibold">Presupuesto aprobado</p>
-            <p className="text-xs text-muted-foreground">Podés generar la orden de trabajo correspondiente.</p>
-          </div>
-          <Button onClick={() => setConfirmOpen(true)}>Generar orden de trabajo</Button>
-        </Card>
-      ) : (
-        <Card className="p-5 text-sm text-muted-foreground">
-          Solo un presupuesto <b className="text-foreground">APROBADO</b> puede generar una Orden de Trabajo.
-        </Card>
-      )}
-
-      <Modal
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        title="Generar orden de trabajo"
-        description={`Se creará una OT ${quote.tipo === "DVH" ? "general con OT de corte y OT de armado asociadas" : "con su orden de corte asociada"}, referenciando ${quote.numero}.`}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancelar</Button>
-            <Button
-              onClick={() => {
-                setGenerated(true);
-                setConfirmOpen(false);
-              }}
-            >
-              Confirmar y generar
-            </Button>
-          </>
-        }
-      >
-        {generated ? (
-          <div className="flex items-center gap-2 text-sm text-vase-green">
-            <CheckCircle2 className="h-4 w-4" /> OT generada correctamente (demo).
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Esta acción no duplica información: la OT conserva la referencia al presupuesto original y hereda cliente, obra e ítems.
-          </p>
-        )}
-      </Modal>
-    </div>
-  );
+  const [quote, setQuote] = useState<any>(null); const [error, setError] = useState(""); const [decision, setDecision] = useState<"APROBADO" | "RECHAZADO" | null>(null); const [saving, setSaving] = useState(false); const router = useRouter();
+  useEffect(() => { fetch(`/api/quotes/${params.id}`).then((r) => r.ok ? r.json() : null).then((payload) => { if (payload?.data) setQuote(payload.data); else setError("No se encontró el presupuesto."); }).catch(() => setError("No se pudo cargar el presupuesto.")); }, [params.id]);
+  async function decide() { if (!decision) return; setSaving(true); const response = await fetch(`/api/quotes/${params.id}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision }) }); const payload = await response.json().catch(() => null); setSaving(false); if (!response.ok) return setError(payload?.error ?? "No se pudo actualizar el presupuesto"); setQuote((current: any) => ({ ...current, ...payload.data.quote, workOrder: payload.data.workOrder })); setDecision(null); }
+  if (error && !quote) return <div className="space-y-4"><Link href="/presupuestos" className="text-sm text-muted-foreground">← Volver a presupuestos</Link><Card className="p-6 text-sm text-red-600">{error}</Card></div>;
+  if (!quote) return <div className="p-8 text-sm text-muted-foreground">Cargando presupuesto…</div>;
+  return <div className="space-y-6"><Link href="/presupuestos" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a presupuestos</Link><div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-xl font-bold tracking-tight">{quote.numero}</h1><p className="text-sm text-muted-foreground">{quote.client?.razonSocial} · {quote.obra}</p></div><span className="rounded-full bg-vase-green-soft px-3 py-1 text-xs font-semibold text-vase-green-dark">{quote.estado}</span></div><div className="grid gap-4 lg:grid-cols-3"><Card className="p-5 lg:col-span-2"><h2 className="mb-4 text-sm font-semibold">Detalle</h2><dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3"><Field label="Fecha" value={formatDate(quote.fecha)} /><Field label="Entrega" value={formatDate(quote.fechaEntrega)} /><Field label="Tipo" value={quote.tipo} /><Field label="Cantidad" value={String(quote.cantidadTotal)} /><Field label="m²" value={formatM2(Number(quote.m2Total))} /><Field label="CUIT" value={quote.client?.cuit ?? "—"} /></dl><table className="mt-6 w-full text-sm"><thead className="border-b text-left text-xs text-muted-foreground"><tr><th className="pb-2">Producto</th><th className="pb-2 text-right">Cant.</th><th className="pb-2 text-right">Medidas</th><th className="pb-2 text-right">Subtotal</th></tr></thead><tbody>{quote.items.map((item: any) => <tr key={item.id} className="border-b last:border-0"><td className="py-2">{item.productoNombre}</td><td className="py-2 text-right">{item.cantidad}</td><td className="py-2 text-right">{item.anchoMm} × {item.altoMm}</td><td className="py-2 text-right">{formatARS(Number(item.subtotalNeto))}</td></tr>)}</tbody></table></Card><Card className="p-5"><h2 className="mb-4 text-sm font-semibold">Total</h2><div className="space-y-2 text-sm"><Total label="Subtotal" value={quote.subtotalNeto} /><Total label="IVA" value={quote.iva} /><Total label="Total" value={quote.total} strong /></div></Card></div>{quote.workOrder ? <Card className="flex flex-wrap items-center justify-between gap-3 border-vase-green/30 p-5"><div><p className="font-semibold">Orden de trabajo {quote.workOrder.numero}</p><p className="text-sm text-muted-foreground">Se generó automáticamente al aprobar el presupuesto.</p></div><Button variant="outline" onClick={() => router.push("/produccion")}>Ver producción</Button></Card> : quote.estado === "ENVIADO" ? <Card className="flex flex-wrap items-center justify-between gap-3 border-vase-green/30 p-5"><div><p className="font-semibold">Esperando decisión comercial</p><p className="text-sm text-muted-foreground">Al aprobar se crea una sola OT con corte y, si corresponde, armado.</p></div><div className="flex gap-2"><Button variant="outline" onClick={() => setDecision("RECHAZADO")}><XCircle className="h-4 w-4" /> Rechazar</Button><Button onClick={() => setDecision("APROBADO")}><CheckCircle2 className="h-4 w-4" /> Aprobar y generar OT</Button></div></Card> : <Card className="p-5 text-sm text-muted-foreground">Este presupuesto debe enviarse y aprobarse antes de generar producción.</Card>}<Modal open={!!decision} onClose={() => setDecision(null)} title={decision === "APROBADO" ? "Aprobar presupuesto" : "Rechazar presupuesto"} description={decision === "APROBADO" ? "Se generará automáticamente una única OT y sus tareas de producción." : "El presupuesto quedará rechazado y no se creará producción."} footer={<><Button variant="outline" onClick={() => setDecision(null)}>Cancelar</Button><Button disabled={saving} onClick={decide}>{saving ? "Guardando…" : "Confirmar"}</Button></>}>{error && <p className="text-sm text-red-600">{error}</p>}</Modal></div>;
 }
-
-function TraceNode({ label, active, current, href }: { label: string; active?: boolean; current?: boolean; href?: string }) {
-  const content = (
-    <motion.div
-      whileHover={href ? { scale: 1.03 } : undefined}
-      className={`rounded-full border px-3 py-1.5 shrink-0 ${
-        current
-          ? "border-vase-green bg-vase-green text-white"
-          : active
-          ? "border-vase-green/40 bg-vase-green-soft text-vase-green-dark"
-          : "border-border bg-secondary/40 text-muted-foreground"
-      }`}
-    >
-      {label}
-    </motion.div>
-  );
-  return href ? <Link href={href}>{content}</Link> : content;
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="font-medium">{value}</dd>
-    </div>
-  );
-}
-
-function TotalRow({ label, value, bold, big, negative }: { label: string; value: number; bold?: boolean; big?: boolean; negative?: boolean }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={`tabular-nums ${bold ? "font-semibold" : ""} ${big ? "text-lg font-bold" : ""} ${negative ? "text-red-500" : ""}`}>
-        {formatARS(value)}
-      </span>
-    </div>
-  );
-}
+function Field({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>; }
+function Total({ label, value, strong }: { label: string; value: number | string; strong?: boolean }) { return <div className={`flex justify-between ${strong ? "border-t pt-2 text-lg font-bold" : ""}`}><span className="text-muted-foreground">{label}</span><span>{formatARS(Number(value))}</span></div>; }

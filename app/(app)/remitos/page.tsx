@@ -1,67 +1,18 @@
 "use client";
-
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { deliveryNotes, getClient, getWorkOrder } from "@/lib/mock-data";
+import { Modal } from "@/components/ui/modal";
+import { Input, Label } from "@/components/ui/input";
 import { formatDate } from "@/lib/format";
 import { motion } from "framer-motion";
-import { Printer, Download } from "lucide-react";
+import { Check, Printer, X } from "lucide-react";
 
 export default function RemitosPage() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">Remitos</h1>
-        <p className="text-sm text-muted-foreground">Documentos de entrega — inmutables una vez confirmados</p>
-      </div>
-
-      <div className="space-y-3">
-        {deliveryNotes.map((r, i) => {
-          const client = getClient(r.clienteId);
-          const ot = getWorkOrder(r.workOrderId);
-          return (
-            <motion.div key={r.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-              <Card className="p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold">{r.numero}</p>
-                      <Badge variant={r.estado === "CONFIRMADO" ? "success" : "danger"}>{r.estado}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">{client?.razonSocial} · OT {ot?.numero}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(r.fecha)} · {r.direccion}{r.transportista && ` · ${r.transportista}`}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline"><Printer className="h-3.5 w-3.5" /> Imprimir</Button>
-                    <Button size="sm" variant="outline"><Download className="h-3.5 w-3.5" /> PDF</Button>
-                  </div>
-                </div>
-                <table className="mt-4 w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                      <th className="py-1.5">Producto</th>
-                      <th className="py-1.5 text-right">Pedido</th>
-                      <th className="py-1.5 text-right">Entregado</th>
-                      <th className="py-1.5 text-right">Pendiente</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {r.items.map((it, idx) => (
-                      <tr key={idx} className="border-b border-border last:border-0">
-                        <td className="py-1.5">{it.producto}</td>
-                        <td className="py-1.5 text-right tabular-nums">{it.cantidadPedida}</td>
-                        <td className="py-1.5 text-right tabular-nums text-vase-green">{it.cantidadEntregada}</td>
-                        <td className="py-1.5 text-right tabular-nums">{it.cantidadPedida - it.cantidadEntregada}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  const [notes, setNotes] = useState<any[]>([]); const [selected, setSelected] = useState<any>(null); const [action, setAction] = useState<"confirm" | "cancel" | null>(null); const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const load = () => fetch("/api/delivery-notes").then((r) => r.ok ? r.json() : null).then((payload) => setNotes(payload?.data ?? [])).catch(() => setNotes([]));
+  useEffect(() => { load(); }, []);
+  async function execute() { if (!selected || !action) return; setBusy(true); setError(""); const response = await fetch(`/api/delivery-notes/${selected.id}/${action === "confirm" ? "confirm" : "cancel"}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: action === "cancel" ? JSON.stringify({ motivo: reason }) : undefined }); const payload = await response.json().catch(() => null); setBusy(false); if (!response.ok) return setError(payload?.error ?? "No se pudo actualizar el remito"); setAction(null); setSelected(null); setReason(""); load(); }
+  return <div className="space-y-6"><div><h1 className="text-xl font-bold tracking-tight">Remitos</h1><p className="text-sm text-muted-foreground">Confirmar es el único paso que descuenta la cantidad pendiente de la OT.</p></div><div className="space-y-3">{notes.map((note, index) => <motion.div key={note.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .04 }}><Card className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><p className="font-semibold">{note.numero}</p><Badge variant={note.estado === "CONFIRMADO" ? "success" : note.estado === "ANULADO" ? "danger" : "warning"}>{note.estado}</Badge></div><p className="mt-0.5 text-sm text-muted-foreground">{note.client?.razonSocial} · OT {note.workOrder?.numero}</p><p className="text-xs text-muted-foreground">{formatDate(note.fecha)} · {note.direccion}{note.transportista ? ` · ${note.transportista}` : ""}</p></div><div className="flex gap-2"><Button size="sm" variant="outline"><Printer className="h-3.5 w-3.5" /> Imprimir</Button>{note.estado === "BORRADOR" && <Button size="sm" onClick={() => { setSelected(note); setAction("confirm"); }}><Check className="h-3.5 w-3.5" /> Confirmar</Button>}{note.estado !== "ANULADO" && <Button size="sm" variant="outline" onClick={() => { setSelected(note); setAction("cancel"); }}><X className="h-3.5 w-3.5" /> Anular</Button>}</div></div><table className="mt-4 w-full text-sm"><thead><tr className="border-b border-border text-left text-xs text-muted-foreground"><th className="py-1.5">Producto</th><th className="py-1.5 text-right">Pedido</th><th className="py-1.5 text-right">A remitir</th></tr></thead><tbody>{note.items.map((item: any) => <tr key={item.id} className="border-b border-border last:border-0"><td className="py-1.5">{item.productoNombre}</td><td className="py-1.5 text-right tabular-nums">{item.cantidadPedida}</td><td className="py-1.5 text-right tabular-nums text-vase-green">{item.cantidadEntregada}</td></tr>)}</tbody></table></Card></motion.div>)}{notes.length === 0 && <Card className="p-10 text-center text-sm text-muted-foreground">No hay remitos creados todavía.</Card>}</div><Modal open={!!action} onClose={() => setAction(null)} title={action === "confirm" ? "Confirmar remito" : "Anular remito"} description={action === "confirm" ? "La confirmación crea la entrega definitiva y descuenta cantidades pendientes." : "La anulación revierte una entrega confirmada de forma auditada."} footer={<><Button variant="outline" onClick={() => setAction(null)}>Cancelar</Button><Button disabled={busy || (action === "cancel" && reason.trim().length < 5)} onClick={execute}>{busy ? "Procesando…" : action === "confirm" ? "Confirmar remito" : "Anular remito"}</Button></>}>{action === "cancel" && <div><Label>Motivo de anulación</Label><Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explicá el motivo (mínimo 5 caracteres)" /></div>}{error && <p className="mt-3 text-sm text-red-600">{error}</p>}</Modal></div>;
 }

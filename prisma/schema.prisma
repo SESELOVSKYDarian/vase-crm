@@ -489,6 +489,8 @@ model Delivery {
   workOrder     WorkOrder @relation(fields: [workOrderId], references: [id])
   fecha         DateTime @default(now())
   cantidadEntregada Int
+  deliveryNoteId String? @unique
+  deliveryNote DeliveryNote? @relation(fields: [deliveryNoteId], references: [id])
 
   items DeliveryItem[]
 
@@ -508,6 +510,7 @@ model DeliveryItem {
 // ---------------- Remitos ----------------
 
 enum DeliveryNoteStatus {
+  BORRADOR
   CONFIRMADO
   ANULADO
 }
@@ -523,9 +526,12 @@ model DeliveryNote {
   direccion     String
   transportista String?
   observaciones String?
-  estado        DeliveryNoteStatus @default(CONFIRMADO)
+  estado        DeliveryNoteStatus @default(BORRADOR)
+  motivoAnulacion String?
+  confirmadoAt  DateTime?
 
   items DeliveryNoteItem[]
+  delivery Delivery?
 
   createdAt DateTime @default(now())
 
@@ -756,4 +762,6 @@ model CompanySettings {
   condicionIva    CondicionIva
   puntoVentaDefault Int
   arcaEnvironment String  @default("HOMOLOGACION")
+  arcaCuit        String?
+  arcaPuntoVenta  Int?
 }
