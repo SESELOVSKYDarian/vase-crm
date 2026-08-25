@@ -17,9 +17,7 @@ export default function FacturacionPage() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [edit, setEdit] = useState<any>(null),
-    [remove, setRemove] = useState<any>(null),
-    [audit, setAudit] = useState<any[]>([]),
-    [showAudit, setShowAudit] = useState(false);
+    [remove, setRemove] = useState<any>(null);
   const load = () =>
     Promise.all([
       fetch("/api/invoices").then((r) => r.json()),
@@ -96,11 +94,6 @@ export default function FacturacionPage() {
     }
     setBusy(false);
   }
-  async function history() {
-    const r = await fetch("/api/audit?entidad=Invoice");
-    setAudit((await r.json()).data ?? []);
-    setShowAudit(true);
-  }
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -111,7 +104,7 @@ export default function FacturacionPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={history}>
+          <Button variant="outline" onClick={() => { window.location.href = "/facturacion/historial"; }}>
             <History className="h-4 w-4" /> Historial
           </Button>
           <Button
@@ -281,36 +274,6 @@ export default function FacturacionPage() {
           </>
         }
       />
-      <Modal
-        open={showAudit}
-        onClose={() => setShowAudit(false)}
-        title="Historial de facturas"
-        description="Cambios y eliminaciones registrados"
-      >
-        <div className="max-h-[55vh] space-y-2 overflow-y-auto">
-          {audit.length ? (
-            audit.map((a) => (
-              <div key={a.id} className="rounded-lg border p-3 text-sm">
-                <b>{a.accion}</b>
-                <span className="ml-2 text-muted-foreground">
-                  {formatDate(a.createdAt)} · {a.user?.name ?? "Sistema"}
-                </span>
-                <pre className="mt-2 whitespace-pre-wrap text-xs">
-                  {JSON.stringify(
-                    { anterior: a.valorAnterior, nuevo: a.valorNuevo },
-                    null,
-                    2,
-                  )}
-                </pre>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Sin movimientos registrados.
-            </p>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 }

@@ -3,7 +3,36 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
+
 const schema = z.object({ recibo: z.string().min(1), observaciones: z.string().max(500).optional() });
-function allowed(u: any, key: string) { return u.role === "ADMIN" || u.userRoles.some((x: any) => x.role.active && x.role.permissions.some((p: any) => p.permission.key === key)); }
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) { const u = await getCurrentUser(); if (!u) return NextResponse.json({ error: "SesiÃ³n requerida" }, { status: 401 }); if (!allowed(u, "payments.edit")) return NextResponse.json({ error: "No tenÃ©s permiso para editar cobros" }, { status: 403 }); const id = (await params).id; const old = await prisma.payment.findUnique({ where: { id } }); if (!old) return NextResponse.json({ error: "Cobro inexistente" }, { status: 404 }); const parsed = schema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Datos invÃ¡lidos" }, { status: 400 }); const next = await prisma.payment.update({ where: { id }, data: parsed.data }); await writeAudit(u.id, "EDITAR", "Payment", id, { recibo: old.recibo, observaciones: old.observaciones }, parsed.data); return NextResponse.json({ data: next }); }
-export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) { const u = await getCurrentUser(); if (!u) return NextResponse.json({ error: "SesiÃ³n requerida" }, { status: 401 }); if (!allowed(u, "payments.delete")) return NextResponse.json({ error: "No tenÃ©s permiso para borrar cobros" }, { status: 403 }); const id = (await params).id; const old = await prisma.payment.findUnique({ where: { id }, include: { allocations: true } }); if (!old) return NextResponse.json({ error: "Cobro inexistente" }, { status: 404 }); await prisma.$transaction(async tx => { await tx.accountMovement.deleteMany({ where: { referencia: old.numero, tipo: "PAGO" } }); await tx.payment.delete({ where: { id } }); }); await writeAudit(u.id, "BORRAR", "Payment", id, { numero: old.numero, recibo: old.recibo, importe: old.importe }, undefined); return NextResponse.json({ data: { id } }); }
+function allowed(user: any, key: string) { return user.role === "ADMIN" || user.userRoles.some((entry: any) => entry.role.active && entry.role.permissions.some((permission: any) => permission.permission.key === key)); }
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
+  if (!allowed(user, "payments.edit")) return NextResponse.json({ error: "No tenés permiso para editar cobros" }, { status: 403 });
+  const id = (await params).id;
+  const previous = await prisma.payment.findUnique({ where: { id } });
+  if (!previous) return NextResponse.json({ error: "Cobro inexistente" }, { status: 404 });
+  const parsed = schema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+  const payment = await prisma.payment.update({ where: { id }, data: parsed.data });
+  await writeAudit(user.id, "EDITAR", "Payment", id, { recibo: previous.recibo, observaciones: previous.observaciones }, { recibo: payment.recibo, observaciones: payment.observaciones });
+  return NextResponse.json({ data: payment });
+}
+
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
+  if (!allowed(user, "payments.delete")) return NextResponse.json({ error: "No tenés permiso para borrar cobros" }, { status: 403 });
+  const id = (await params).id;
+  const payment = await prisma.payment.findUnique({ where: { id }, include: { allocations: true } });
+  if (!payment) return NextResponse.json({ error: "Cobro inexistente" }, { status: 404 });
+  const snapshot = { record: { id: payment.id, numero: payment.numero, fecha: payment.fecha, clientId: payment.clientId, recibo: payment.recibo, metodo: payment.metodo, moneda: payment.moneda, importe: payment.importe, montoUsd: payment.montoUsd, tipoCambio: payment.tipoCambio, fechaTipoCambio: payment.fechaTipoCambio, montoEquivalenteArs: payment.montoEquivalenteArs, observaciones: payment.observaciones }, allocations: payment.allocations.map((allocation) => ({ target: allocation.target, invoiceId: allocation.invoiceId, monto: allocation.monto })) };
+  await prisma.$transaction(async (tx) => {
+    await tx.accountMovement.deleteMany({ where: { referencia: payment.numero, tipo: "PAGO" } });
+    await tx.payment.delete({ where: { id } });
+  });
+  await writeAudit(user.id, "BORRAR", "Payment", id, snapshot, undefined);
+  return NextResponse.json({ data: { id } });
+}

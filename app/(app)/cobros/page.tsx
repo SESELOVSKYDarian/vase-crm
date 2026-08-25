@@ -37,9 +37,7 @@ export default function CobrosPage() {
     [invoices, setInvoices] = useState<any[]>([]);
   const [open, setOpen] = useState(false),
     [edit, setEdit] = useState<any>(null),
-    [remove, setRemove] = useState<any>(null),
-    [audit, setAudit] = useState<any[]>([]),
-    [showAudit, setShowAudit] = useState(false);
+    [remove, setRemove] = useState<any>(null);
   const [search, setSearch] = useState(""),
     [clientId, setClientId] = useState(""),
     [receipt, setReceipt] = useState(""),
@@ -202,11 +200,6 @@ export default function CobrosPage() {
     }
     setBusy(false);
   }
-  async function history() {
-    const r = await fetch("/api/audit?entidad=Payment");
-    setAudit((await r.json()).data ?? []);
-    setShowAudit(true);
-  }
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -217,7 +210,7 @@ export default function CobrosPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={history}>
+          <Button variant="outline" onClick={() => { window.location.href = "/cobros/historial"; }}>
             <History className="h-4 w-4" /> Historial
           </Button>
           <Button onClick={() => start()}>
@@ -540,36 +533,6 @@ export default function CobrosPage() {
           </>
         }
       />
-      <Modal
-        open={showAudit}
-        onClose={() => setShowAudit(false)}
-        title="Historial de cobros"
-        description="Cambios y eliminaciones registrados"
-      >
-        <div className="max-h-[55vh] space-y-2 overflow-y-auto">
-          {audit.length ? (
-            audit.map((a) => (
-              <div key={a.id} className="rounded-lg border p-3 text-sm">
-                <b>{a.accion}</b>
-                <span className="ml-2 text-muted-foreground">
-                  {formatDate(a.createdAt)} · {a.user?.name ?? "Sistema"}
-                </span>
-                <pre className="mt-2 whitespace-pre-wrap text-xs">
-                  {JSON.stringify(
-                    { anterior: a.valorAnterior, nuevo: a.valorNuevo },
-                    null,
-                    2,
-                  )}
-                </pre>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Sin movimientos registrados.
-            </p>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 }

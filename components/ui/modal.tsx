@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -18,6 +18,7 @@ interface ModalProps {
 const sizeMap = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl" };
 
 export function Modal({ open, onClose, title, description, children = null, footer, size = "md" }: ModalProps) {
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -27,7 +28,15 @@ export function Modal({ open, onClose, title, description, children = null, foot
   }, [open, onClose]);
 
   const dialogRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (open) dialogRef.current?.querySelector<HTMLElement>("input,select,button,textarea")?.focus(); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(() => {
+      dialogRef.current
+        ?.querySelector<HTMLElement>("[data-modal-content] input, [data-modal-content] select, [data-modal-content] textarea, [data-modal-content] button")
+        ?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [open]);
 
   if (typeof document === "undefined") return null;
 
@@ -39,15 +48,15 @@ export function Modal({ open, onClose, title, description, children = null, foot
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.14 }}
+            transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
             className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
             onClick={onClose}
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.97, y: 10 }}
+            initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.975, y: reduceMotion ? 0 : 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.985, y: 4 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.985, y: reduceMotion ? 0 : 8 }}
+            transition={{ duration: reduceMotion ? 0 : 0.26, ease: [0.16, 1, 0.3, 1] }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -62,12 +71,12 @@ export function Modal({ open, onClose, title, description, children = null, foot
               <button
                 onClick={onClose}
                 aria-label="Cerrar"
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-vase-green"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="max-h-[70vh] overflow-y-auto p-5">{children}</div>
+            <div data-modal-content className="max-h-[70vh] overflow-y-auto p-5">{children}</div>
             {footer && <div className="flex justify-end gap-2 border-t border-border p-4">{footer}</div>}
           </motion.div>
         </div>
