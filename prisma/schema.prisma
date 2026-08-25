@@ -36,6 +36,7 @@ model User {
   updatedAt     DateTime @updatedAt
 
   auditLogs     AuditLog[]
+  arcaConnectionTests ArcaConnectionTest[]
   quotesCreated Quote[]        @relation("QuoteCreatedBy")
   otsAssigned   WorkOrder[]    @relation("WorkOrderOperario")
   sessions      Session[]
@@ -767,5 +768,45 @@ model CompanySettings {
   arcaCertificate String? @db.LongText
   arcaPrivateKey  String? @db.LongText
   arcaService     String  @default("wsfe")
+  arcaCertificateSubject String?
+  arcaCertificateIssuer String?
+  arcaCertificateSerial String?
+  arcaCertificateValidFrom DateTime?
+  arcaCertificateValidTo DateTime?
+  arcaLastConnectionTestAt DateTime?
+  arcaLastConnectionStatus String?
+  arcaLastConnectionMessage String? @db.Text
   logoData        String? @db.LongText
+}
+
+model ArcaAccessTicket {
+  id             String   @id @default(cuid())
+  environment    String
+  cuit           String
+  service        String
+  tokenEncrypted String   @db.LongText
+  signEncrypted  String   @db.LongText
+  generationTime DateTime
+  expirationTime DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([environment, cuit, service])
+  @@index([expirationTime])
+}
+
+model ArcaConnectionTest {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  environment String
+  testType   String
+  status     String
+  durationMs Int?
+  errorCode  String?
+  message    String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([environment, testType])
 }

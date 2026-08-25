@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "db:seed": "tsx prisma/seed.ts",
     "db:push": "prisma db push",
+    "arca:migrate-credentials": "tsx scripts/migrate-arca-credentials.ts",
+    "test:arca:homo": "tsx scripts/test-arca-homologacion.ts",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down"
   },

@@ -1,48 +1,54 @@
-# ARCA.md — Estrategia de integración fiscal
+# Integración ARCA
 
-## Estado de este entregable
+Vase CRM integra WSAA y WSFEv1 contra **homologación**. Producción permanece bloqueada salvo que `ARCA_PRODUCTION_ENABLED=true`.
 
-`modules/arca/providers/MockArcaProvider.ts` **no se conecta a ARCA real**. Implementa el mismo contrato (`ArcaInvoiceProvider`) que tendría la integración real, simulando: numeración correlativa por punto de venta + tipo de comprobante, generación de CAE, vencimiento a 10 días, validaciones de negocio e idempotencia. Esto permite construir y testear todo el flujo de facturación, cuenta corriente y PDF sin depender de certificados.
+## Seguridad
 
-## Reemplazo por la integración real
+- Certificado y clave privada se cifran en MySQL con AES-256-GCM.
+- `ARCA_CREDENTIALS_MASTER_KEY` se obtiene exclusivamente del entorno; nunca se genera automáticamente.
+- El frontend recibe solamente indicadores de configuración y metadata no sensible.
+- Token y Sign de WSAA se guardan cifrados en `ArcaAccessTicket` y se renuevan cinco minutos antes de expirar.
 
-1. **Autenticación WSAA**
-   - Generar un CMS (`openssl smime`) firmado con el certificado digital + clave privada de la empresa.
-   - Enviarlo al WSAA (`wsaahomo.afip.gov.ar` en homologación) y obtener el Ticket de Acceso (Token + Sign), válido ~12hs.
-   - Cachear el Ticket de Acceso (ej. en una tabla `ArcaAccessTicket` o Redis) y renovarlo antes de que expire — **nunca pedirlo en cada request**.
-   - El certificado y la clave privada se guardan cifrados en el servidor (variables de entorno gestionadas por un secret manager, o un KMS), **nunca en el repositorio ni expuestos al frontend**.
+## Providers
 
-2. **WSFEv1 (o WSMTXCA)**
-   - `FECompUltimoAutorizado` → reemplaza `getLastAuthorizedVoucher`.
-   - `FECAESolicitar` → reemplaza `authorizeInvoice`. Mapear la respuesta (`FeDetResp`) a `ArcaInvoiceResult`, incluyendo errores (`Errors`) y observaciones (`Observaciones`) sin traducir de más — guardarlos crudos en `ArcaTransaction.responsePayload` para auditoría.
-   - Decidir entre WSFEv1 (más simple, ítems no van al comprobante) y WSMTXCA (permite el detalle de ítems en el comprobante) según si WTA necesita el detalle de vidrios facturado línea por línea ante ARCA o alcanza con el total. **Pendiente de definir con el cliente.**
+- `MockArcaProvider`: pruebas unitarias y desarrollo aislado.
+- `WsfeArcaProvider`: proveedor real que firma el TRA, solicita WSAA y consume WSFEv1.
 
-3. **Idempotencia**
-   - Mantener `ArcaTransaction.idempotencyKey` único por intento de emisión de una factura (`invoice:{invoiceId}:{intento}` o similar).
-   - Antes de llamar a `FECAESolicitar`, verificar si ya existe una transacción `AUTORIZADA` para esa factura — si existe, no reintentar, devolver el resultado cacheado.
-   - Si la llamada falla por timeout (no se sabe si ARCA autorizó o no), la próxima consulta debe usar `FECompConsultar` con el mismo número de comprobante antes de reintentar `FECAESolicitar`, para no arriesgarse a una autorización duplicada.
+El contenedor instala OpenSSL. La firma usa un directorio temporal privado y se elimina al finalizar.
 
-4. **Nunca marcar como autorizada sin confirmación**
-   - `Invoice.estadoArca` solo pasa a `AUTORIZADA` cuando `ArcaInvoiceResult.estado === "AUTORIZADA"` **y** `cae` no es null. Cualquier otro caso queda en `PENDIENTE`, `RECHAZADA` o `ERROR`, nunca se asume éxito optimista.
+## Variables
 
-## Clasificación interna A/N vs. comprobante ARCA
-
-`Invoice.tipoFacturacion` (`A` | `N`) es un campo de **gestión interna** de WTA, heredado del Excel de control. `Invoice.arcaVoucherType` (`FACTURA_A`, `FACTURA_B`, etc.) es el tipo de comprobante fiscal real. Regla aplicada en todo el sistema:
-
-```
-tipoFacturacion = "N"  →  arcaVoucherType = null  →  nunca se llama a ArcaInvoiceProvider
-tipoFacturacion = "A"  →  arcaVoucherType = FACTURA_A | FACTURA_B | FACTURA_C  →  sí se llama
+```env
+ARCA_CREDENTIALS_MASTER_KEY=<base64 de 32 bytes>
+ARCA_PRODUCTION_ENABLED=false
+ARCA_HTTP_TIMEOUT_MS=15000
 ```
 
-Esto evita el error de interpretar automáticamente `N` como "Nota de Crédito" o cualquier tipo fiscal — es una clasificación de negocio, no fiscal.
+Generar la master key:
 
-## Ambientes
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
 
-`ArcaInvoiceProvider.getEnvironment()` devuelve `"HOMOLOGACION"` o `"PRODUCCION"`. El cambio de ambiente debe:
-- Usar credenciales/certificados distintos (homologación y producción no comparten certificado).
-- Bloquear el cambio a `PRODUCCION` a nivel de configuración (`CompanySettings.arcaEnvironment`) hasta que exista un certificado de producción válido cargado.
+## Migración
 
-## Riesgos conocidos
+Después de definir la master key:
 
-- Los Web Services de ARCA pueden tener ventanas de mantenimiento — el sistema debe degradar con gracia (dejar la factura en `PENDIENTE`, permitir reintentar manualmente) en vez de bloquear el flujo comercial completo.
-- El mapeo de condición de IVA del cliente a `clienteDocTipo`/`condicionIvaReceptor` de ARCA tiene reglas específicas (ej. Consumidor Final con importes menores a cierto monto no requiere documento) que deben confirmarse con el contador de WTA antes de ir a producción.
+```bash
+npx prisma db push
+npm run arca:migrate-credentials
+```
+
+El script detecta valores antiguos no cifrados y los cifra sin imprimirlos.
+
+## Homologación
+
+1. Obtenga el certificado de testing en WSASS de ARCA y asígnelo al servicio `wsfe`.
+2. Cargue CUIT, punto de venta, certificado PEM y clave PEM en Configuración → ARCA.
+3. Ejecute las pruebas de credenciales, WSAA y WSFEv1.
+
+Las URLs están centralizadas en `modules/arca/endpoints.ts` y se basan en documentación oficial de ARCA.
+
+## Producción
+
+No se habilita por defecto. Requiere certificado, delegación y revisión fiscal específica.

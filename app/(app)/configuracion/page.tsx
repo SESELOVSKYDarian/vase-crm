@@ -1,15 +1,632 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { ImagePlus, Save, ShieldCheck } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import {
+  CheckCircle2,
+  FileKey2,
+  ImagePlus,
+  Loader2,
+  Save,
+  ShieldCheck,
+  Upload,
+  XCircle,
+} from "lucide-react";
+import { formatDate } from "@/lib/format";
+
+type Settings = Record<string, any>;
+function readPem(file: File, set: (value: string) => void) {
+  const reader = new FileReader();
+  reader.onload = () => set(String(reader.result ?? ""));
+  reader.readAsText(file);
+}
+
+function ArcaPanel({
+  form,
+  set,
+  save,
+  status,
+}: {
+  form: Settings;
+  set: (key: string, value: any) => void;
+  save: (overrides?: Settings) => Promise<void>;
+  status: string;
+}) {
+  const certRef = useRef<HTMLInputElement>(null),
+    keyRef = useRef<HTMLInputElement>(null);
+  const [arca, setArca] = useState<any>(null),
+    [running, setRunning] = useState(""),
+    [result, setResult] = useState<any>(null),
+    [confirm, setConfirm] = useState<"certificate" | "key" | null>(null),
+    [testInvoiceOpen, setTestInvoiceOpen] = useState(false),
+    [testInvoice, setTestInvoice] = useState({
+      clienteDocTipo: "CUIT",
+      clienteDocNumero: "",
+      importeNeto: "",
+      importeIva: "",
+      importeTributos: "0",
+      fecha: new Date().toISOString().slice(0, 10),
+    });
+  const refresh = () =>
+    fetch("/api/arca/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => setArca(p?.data ?? null));
+  useEffect(() => {
+    refresh();
+  }, []);
+  async function test(action: string) {
+    setRunning(action);
+    setResult(null);
+    const response = await fetch(`/api/arca/test/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        puntoVenta: form.arcaPuntoVenta,
+        voucherType: "FACTURA_A",
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    setResult({
+      ok: response.ok,
+      action,
+      ...(response.ok
+        ? payload.data
+        : { error: payload?.error ?? "No se pudo completar la prueba." }),
+    });
+    setRunning("");
+    refresh();
+  }
+  async function removeSecret(type: "certificate" | "key") {
+    setConfirm(null);
+    await save({
+      [type === "certificate"
+        ? "deleteArcaCertificate"
+        : "deleteArcaPrivateKey"]: true,
+    });
+    refresh();
+  }
+  async function submitTestInvoice() {
+    setRunning("invoice");
+    const net = Number(testInvoice.importeNeto),
+      iva = Number(testInvoice.importeIva),
+      tributos = Number(testInvoice.importeTributos || 0);
+    const response = await fetch("/api/arca/test/invoice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...testInvoice,
+        puntoVenta: form.arcaPuntoVenta,
+        importeNeto: net,
+        importeIva: iva,
+        importeTributos: tributos,
+        importeTotal: net + iva + tributos,
+        moneda: "PES",
+        cotizacionMoneda: 1,
+        conceptos: "PRODUCTOS",
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    setResult({
+      ok: response.ok,
+      action: "invoice",
+      ...(response.ok
+        ? payload.data
+        : { error: payload?.error ?? "No se pudo emitir la prueba." }),
+    });
+    setRunning("");
+    if (response.ok) setTestInvoiceOpen(false);
+    refresh();
+  }
+  const certificateConfigured = Boolean(form.arcaCertificateConfigured),
+    keyConfigured = Boolean(form.arcaPrivateKeyConfigured);
+  return (
+    <div className="grid max-w-5xl gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-5">
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 text-vase-green" />
+              <div>
+                <p className="font-semibold">Conexión ARCA / AFIP</p>
+                <p className="text-sm text-muted-foreground">
+                  Configurá y verificá la integración fiscal en homologación.
+                </p>
+              </div>
+            </div>
+            <Badge
+              variant={
+                arca?.lastConnection?.status === "VERIFICADA"
+                  ? "success"
+                  : arca?.lastConnection?.status === "ERROR"
+                    ? "danger"
+                    : "warning"
+              }
+            >
+              {arca?.lastConnection?.status === "VERIFICADA"
+                ? "Conexión verificada"
+                : arca?.lastConnection?.status === "ERROR"
+                  ? "Error de conexión"
+                  : certificateConfigured && keyConfigured
+                    ? "Configurado"
+                    : "No configurado"}
+            </Badge>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Ambiente</Label>
+              <Select
+                value={form.arcaEnvironment ?? "HOMOLOGACION"}
+                onChange={(e) => set("arcaEnvironment", e.target.value)}
+              >
+                <option value="HOMOLOGACION">Homologación (pruebas)</option>
+                <option value="PRODUCCION">Producción — bloqueada</option>
+              </Select>
+              {form.arcaEnvironment === "PRODUCCION" && (
+                <p className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-700">
+                  Producción emite comprobantes fiscales reales. Esta función
+                  está bloqueada actualmente por Vase.
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>CUIT emisor ARCA</Label>
+              <Input
+                value={form.arcaCuit ?? ""}
+                onChange={(e) => set("arcaCuit", e.target.value)}
+                placeholder="20-12345678-9"
+              />
+            </div>
+            <div>
+              <Label>Punto de venta ARCA</Label>
+              <Input
+                type="number"
+                value={form.arcaPuntoVenta ?? ""}
+                onChange={(e) =>
+                  set(
+                    "arcaPuntoVenta",
+                    e.target.value ? Number(e.target.value) : null,
+                  )
+                }
+              />
+            </div>
+            <div>
+              <Label>Punto de venta por defecto</Label>
+              <Input
+                type="number"
+                value={form.puntoVentaDefault ?? 1}
+                onChange={(e) =>
+                  set("puntoVentaDefault", Number(e.target.value))
+                }
+              />
+            </div>
+          </div>
+          <Credential
+            title="Certificado X.509"
+            configured={certificateConfigured}
+            metadata={
+              form.arcaCertificateSubject
+                ? {
+                    subject: form.arcaCertificateSubject,
+                    issuer: form.arcaCertificateIssuer,
+                    validFrom: form.arcaCertificateValidFrom,
+                    validTo: form.arcaCertificateValidTo,
+                  }
+                : null
+            }
+            textarea={form.arcaCertificate ?? ""}
+            placeholder="-----BEGIN CERTIFICATE-----"
+            onChange={(v: string) => set("arcaCertificate", v)}
+            onFile={() => certRef.current?.click()}
+            onRemove={() => setConfirm("certificate")}
+            inputRef={certRef}
+            accept=".crt,.cer,.pem"
+            onInput={(f: File) => readPem(f, (v) => set("arcaCertificate", v))}
+          />
+          <Credential
+            title="Clave privada"
+            configured={keyConfigured}
+            textarea={form.arcaPrivateKey ?? ""}
+            placeholder="-----BEGIN PRIVATE KEY-----"
+            onChange={(v: string) => set("arcaPrivateKey", v)}
+            onFile={() => keyRef.current?.click()}
+            onRemove={() => setConfirm("key")}
+            inputRef={keyRef}
+            accept=".key,.pem"
+            onInput={(f: File) => readPem(f, (v) => set("arcaPrivateKey", v))}
+          />
+          <p className="mt-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            Las credenciales se cifran en el servidor y no vuelven al navegador.
+            No pegues ni compartas estos datos fuera de esta pantalla.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Button
+              onClick={async () => {
+                await save();
+                refresh();
+              }}
+            >
+              <Save className="h-4 w-4" /> Guardar configuración ARCA
+            </Button>
+            {status && (
+              <span className="text-sm text-muted-foreground">{status}</span>
+            )}
+          </div>
+        </Card>
+        <Card className="p-5">
+          <h2 className="font-semibold">Pruebas de conexión ARCA</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Las pruebas de conexión no emiten comprobantes.
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <TestButton
+              label="Validar credenciales"
+              action="credentials"
+              running={running}
+              onClick={test}
+            />
+            <TestButton
+              label="Probar autenticación WSAA"
+              action="wsaa"
+              running={running}
+              onClick={test}
+            />
+            <TestButton
+              label="Probar conexión WSFEv1"
+              action="wsfe"
+              running={running}
+              onClick={test}
+            />
+            <TestButton
+              label="Consultar último autorizado"
+              action="last-voucher"
+              running={running}
+              onClick={test}
+            />
+          </div>
+          <Button
+            className="mt-3"
+            variant="outline"
+            onClick={() => test("full")}
+            disabled={Boolean(running)}
+          >
+            {running === "full" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4" />
+            )}{" "}
+            Ejecutar diagnóstico completo
+          </Button>
+          {form.arcaEnvironment === "HOMOLOGACION" && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+              <p className="font-medium">Prueba de emisión en homologación</p>
+              <p className="mt-1 text-xs">
+                Solicita un CAE de prueba. No tiene validez fiscal productiva.
+              </p>
+              <Button
+                className="mt-3"
+                size="sm"
+                variant="outline"
+                onClick={() => setTestInvoiceOpen(true)}
+              >
+                Abrir prueba de emisión
+              </Button>
+            </div>
+          )}
+          {result && (
+            <div
+              className={`mt-4 rounded-xl border p-4 text-sm ${result.ok ? "border-vase-green/30 bg-vase-green-soft/40" : "border-red-200 bg-red-50 text-red-700"}`}
+            >
+              <b>{result.ok ? "Prueba completada" : "La prueba falló"}</b>
+              <p className="mt-1">
+                {result.error ?? `${result.durationMs ?? 0} ms`}
+              </p>
+              {result.lastVoucher && (
+                <p className="mt-2">
+                  Último comprobante:{" "}
+                  {result.lastVoucher.ultimoNumeroAutorizado} · Punto de venta{" "}
+                  {result.lastVoucher.puntoVenta}
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
+      <div className="space-y-5">
+        <Card className="p-5">
+          <h2 className="font-semibold">Estado de conexión</h2>
+          <p className="mt-3 text-sm">
+            <span
+              className={
+                arca?.lastConnection?.status === "VERIFICADA"
+                  ? "text-vase-green"
+                  : "text-amber-600"
+              }
+            >
+              ●
+            </span>{" "}
+            {arca?.lastConnection?.status === "VERIFICADA"
+              ? "Conexión verificada"
+              : "Pendiente de verificar"}
+          </p>
+          {arca?.lastConnection?.at && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Última prueba: {formatDate(arca.lastConnection.at)}
+            </p>
+          )}
+          <div className="mt-4 space-y-2 text-xs">
+            {["Certificado", "Clave privada", "CUIT", "Punto de venta"].map(
+              (item, index) => (
+                <p key={item} className="flex items-center gap-2">
+                  {(
+                    index === 0
+                      ? certificateConfigured
+                      : index === 1
+                        ? keyConfigured
+                        : index === 2
+                          ? Boolean(form.arcaCuit)
+                          : Boolean(form.arcaPuntoVenta)
+                  ) ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-vase-green" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                  {item}
+                </p>
+              ),
+            )}
+          </div>
+        </Card>
+        <Card className="p-5">
+          <h2 className="font-semibold">Últimas pruebas</h2>
+          <div className="mt-3 space-y-3">
+            {arca?.tests?.length ? (
+              arca.tests.map((test: any) => (
+                <div
+                  key={test.id}
+                  className="border-b pb-3 text-xs last:border-0"
+                >
+                  <div className="flex justify-between gap-2">
+                    <b>{test.testType}</b>
+                    <span
+                      className={
+                        test.status === "EXITOSA"
+                          ? "text-vase-green"
+                          : "text-red-600"
+                      }
+                    >
+                      {test.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    {test.user?.name ?? "Sistema"} · {test.durationMs ?? "—"} ms
+                  </p>
+                  <p className="mt-1 text-muted-foreground">{test.message}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Aún no hay pruebas.
+              </p>
+            )}
+          </div>
+        </Card>
+      </div>
+      <Modal
+        open={!!confirm}
+        onClose={() => setConfirm(null)}
+        title={
+          confirm === "certificate"
+            ? "¿Eliminar certificado?"
+            : "¿Eliminar clave privada?"
+        }
+        description="La conexión ARCA dejará de funcionar hasta cargar una nueva credencial."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirm(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => removeSecret(confirm!)}>Eliminar</Button>
+          </>
+        }
+      />
+      <Modal
+        open={testInvoiceOpen}
+        onClose={() => setTestInvoiceOpen(false)}
+        title="Prueba de emisión en homologación"
+        description="HOMOLOGACIÓN — SIN VALIDEZ FISCAL PRODUCTIVA"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setTestInvoiceOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={running === "invoice"}
+              onClick={submitTestInvoice}
+            >
+              {running === "invoice"
+                ? "Solicitando CAE…"
+                : "Solicitar CAE de prueba"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Punto de venta</Label>
+            <Input value={form.arcaPuntoVenta ?? ""} disabled />
+          </div>
+          <div>
+            <Label>Tipo comprobante</Label>
+            <Input value="Factura A" disabled />
+          </div>
+          <div>
+            <Label>Documento receptor</Label>
+            <Select
+              value={testInvoice.clienteDocTipo}
+              onChange={(e) =>
+                setTestInvoice({
+                  ...testInvoice,
+                  clienteDocTipo: e.target.value,
+                })
+              }
+            >
+              <option value="CUIT">CUIT</option>
+              <option value="DNI">DNI</option>
+              <option value="CONSUMIDOR_FINAL">Consumidor final</option>
+            </Select>
+          </div>
+          <div>
+            <Label>CUIT/DNI receptor</Label>
+            <Input
+              value={testInvoice.clienteDocNumero}
+              onChange={(e) =>
+                setTestInvoice({
+                  ...testInvoice,
+                  clienteDocNumero: e.target.value,
+                })
+              }
+            />
+          </div>
+          <div>
+            <Label>Importe neto</Label>
+            <Input
+              type="number"
+              value={testInvoice.importeNeto}
+              onChange={(e) =>
+                setTestInvoice({ ...testInvoice, importeNeto: e.target.value })
+              }
+            />
+          </div>
+          <div>
+            <Label>IVA</Label>
+            <Input
+              type="number"
+              value={testInvoice.importeIva}
+              onChange={(e) =>
+                setTestInvoice({ ...testInvoice, importeIva: e.target.value })
+              }
+            />
+          </div>
+          <div>
+            <Label>Tributos</Label>
+            <Input
+              type="number"
+              value={testInvoice.importeTributos}
+              onChange={(e) =>
+                setTestInvoice({
+                  ...testInvoice,
+                  importeTributos: e.target.value,
+                })
+              }
+            />
+          </div>
+          <div>
+            <Label>Fecha</Label>
+            <Input
+              type="date"
+              value={testInvoice.fecha}
+              onChange={(e) =>
+                setTestInvoice({ ...testInvoice, fecha: e.target.value })
+              }
+            />
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+function Credential({
+  title,
+  configured,
+  metadata,
+  textarea,
+  placeholder,
+  onChange,
+  onFile,
+  onRemove,
+  inputRef,
+  accept,
+  onInput,
+}: any) {
+  return (
+    <div className="mt-5 rounded-xl border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-medium">{title}</p>
+          {configured ? (
+            <div className="mt-1 text-xs text-vase-green">
+              <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+              Configurado
+              {metadata?.validTo && (
+                <> · Vence: {formatDate(metadata.validTo)}</>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">Sin configurar</p>
+          )}
+          {metadata?.subject && (
+            <p className="mt-2 max-w-xl text-xs text-muted-foreground">
+              Titular: {metadata.subject}
+              <br />
+              Emisor: {metadata.issuer}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={onFile}>
+            <Upload className="h-3.5 w-3.5" /> Reemplazar
+          </Button>
+          {configured && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onRemove}
+            >
+              Eliminar
+            </Button>
+          )}
+        </div>
+      </div>
+      <input
+        ref={inputRef}
+        className="hidden"
+        type="file"
+        accept={accept}
+        onChange={(e) => e.target.files?.[0] && onInput(e.target.files[0])}
+      />
+      <textarea
+        value={textarea}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-3 min-h-24 w-full rounded-lg border bg-background p-3 font-mono text-xs"
+      />
+    </div>
+  );
+}
+function TestButton({ label, action, running, onClick }: any) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      disabled={Boolean(running)}
+      onClick={() => onClick(action)}
+    >
+      {running === action && <Loader2 className="h-4 w-4 animate-spin" />}
+      {label}
+    </Button>
+  );
+}
+
 export default function ConfiguracionPage() {
   const [tab, setTab] = useState("empresa"),
-    [form, setForm] = useState<any>({
+    [form, setForm] = useState<Settings>({
       arcaEnvironment: "HOMOLOGACION",
       puntoVentaDefault: 1,
     }),
@@ -19,7 +636,7 @@ export default function ConfiguracionPage() {
   useEffect(() => {
     fetch("/api/company-settings")
       .then((r) => r.json())
-      .then((p) => setForm((x: any) => ({ ...x, ...(p.data ?? {}) })));
+      .then((p) => setForm((x) => ({ ...x, ...(p.data ?? {}) })));
     fetch("/api/users")
       .then((r) => (r.ok ? r.json() : []))
       .then(setUsers);
@@ -27,26 +644,33 @@ export default function ConfiguracionPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then((p) => setRoles(Array.isArray(p) ? p : []));
   }, []);
-  const set = (k: string, v: any) => setForm((x: any) => ({ ...x, [k]: v }));
-  function choose(f: File | null) {
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => set("logoData", String(r.result));
-    r.readAsDataURL(f);
-  }
-  async function save() {
+  const set = (key: string, value: any) =>
+    setForm((current) => ({ ...current, [key]: value }));
+  async function save(overrides: Settings = {}) {
     setStatus("Guardando…");
-    const r = await fetch("/api/company-settings", {
+    const response = await fetch("/api/company-settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, ...overrides }),
     });
-    const p = await r.json().catch(() => null);
-    setStatus(
-      r.ok
-        ? "Configuración guardada correctamente"
-        : (p?.error ?? "No se pudo guardar"),
-    );
+    const payload = await response.json().catch(() => null);
+    if (response.ok) {
+      setForm((current) => ({
+        ...current,
+        ...(payload.data ?? {}),
+        arcaCertificate: "",
+        arcaPrivateKey: "",
+        deleteArcaCertificate: false,
+        deleteArcaPrivateKey: false,
+      }));
+      setStatus("Configuración guardada correctamente.");
+    } else setStatus(payload?.error ?? "No se pudo guardar.");
+  }
+  function chooseLogo(file: File | null) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => set("logoData", String(reader.result));
+    reader.readAsDataURL(file);
   }
   return (
     <div className="space-y-6">
@@ -73,7 +697,7 @@ export default function ConfiguracionPage() {
             <div>
               <p className="font-semibold">Logo de la empresa</p>
               <p className="text-sm text-muted-foreground">
-                Se utilizará en presupuestos, remitos y facturas imprimibles.
+                Se utiliza en presupuestos, remitos y facturas.
               </p>
             </div>
           </div>
@@ -82,7 +706,7 @@ export default function ConfiguracionPage() {
               <img
                 src={form.logoData}
                 alt="Logo actual"
-                className="h-20 w-32 rounded-lg border object-contain p-2"
+                className="h-20 w-32 object-contain"
               />
             ) : (
               <div className="flex h-20 w-32 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
@@ -95,7 +719,7 @@ export default function ConfiguracionPage() {
                 className="hidden"
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
-                onChange={(e) => choose(e.target.files?.[0] ?? null)}
+                onChange={(e) => chooseLogo(e.target.files?.[0] ?? null)}
               />
             </label>
           </div>
@@ -118,108 +742,14 @@ export default function ConfiguracionPage() {
           <Button className="mt-5" onClick={save}>
             <Save className="h-4 w-4" /> Guardar empresa
           </Button>
+          {status && (
+            <p className="mt-3 text-sm text-muted-foreground">{status}</p>
+          )}
         </Card>
       )}
       {tab === "arca" && (
-        <Card className="max-w-2xl p-5">
-          <div className="flex gap-3">
-            <ShieldCheck className="mt-0.5 h-5 w-5 text-vase-green" />
-            <div>
-              <p className="font-semibold">Conexión ARCA / AFIP</p>
-              <p className="text-sm text-muted-foreground">
-                Usá homologación para pruebas. Producción emite comprobantes
-                fiscales reales y requiere certificado vigente.
-              </p>
-            </div>
-          </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Ambiente</Label>
-              <Select
-                value={form.arcaEnvironment ?? "HOMOLOGACION"}
-                onChange={(e) => set("arcaEnvironment", e.target.value)}
-              >
-                <option value="HOMOLOGACION">Homologación (pruebas)</option>
-                <option value="PRODUCCION">Producción</option>
-              </Select>
-            </div>
-            <div>
-              <Label>CUIT emisor ARCA</Label>
-              <Input
-                value={form.arcaCuit ?? ""}
-                onChange={(e) => set("arcaCuit", e.target.value)}
-                placeholder="20-12345678-9"
-              />
-            </div>
-            <div>
-              <Label>Punto de venta ARCA</Label>
-              <Input
-                type="number"
-                value={form.arcaPuntoVenta ?? ""}
-                onChange={(e) =>
-                  set(
-                    "arcaPuntoVenta",
-                    e.target.value ? Number(e.target.value) : null,
-                  )
-                }
-                placeholder="Ej. 1"
-              />
-            </div>
-            <div>
-              <Label>Punto de venta por defecto</Label>
-              <Input
-                type="number"
-                value={form.puntoVentaDefault ?? 1}
-                onChange={(e) =>
-                  set("puntoVentaDefault", Number(e.target.value))
-                }
-              />
-            </div>
-          </div>
-          <div className="mt-5">
-            <Label>Certificado X.509 (.crt / .pem)</Label>
-            <textarea
-              value={
-                form.arcaCertificate === "CONFIGURADO"
-                  ? ""
-                  : (form.arcaCertificate ?? "")
-              }
-              onChange={(e) => set("arcaCertificate", e.target.value)}
-              placeholder={
-                form.arcaCertificate === "CONFIGURADO"
-                  ? "Certificado configurado. Pegá uno nuevo sólo para reemplazarlo."
-                  : "Pegá el contenido del certificado"
-              }
-              className="mt-1 min-h-28 w-full rounded-lg border bg-background p-3 font-mono text-xs"
-            />
-          </div>
-          <div className="mt-4">
-            <Label>Clave privada (.key / .pem)</Label>
-            <textarea
-              value={
-                form.arcaPrivateKey === "CONFIGURADA"
-                  ? ""
-                  : (form.arcaPrivateKey ?? "")
-              }
-              onChange={(e) => set("arcaPrivateKey", e.target.value)}
-              placeholder={
-                form.arcaPrivateKey === "CONFIGURADA"
-                  ? "Clave configurada. Pegá una nueva sólo para reemplazarla."
-                  : "Pegá el contenido de la clave privada"
-              }
-              className="mt-1 min-h-28 w-full rounded-lg border bg-background p-3 font-mono text-xs"
-            />
-          </div>
-          <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-            Las credenciales no vuelven a mostrarse al navegador. Antes de
-            emitir en producción, verificá que el certificado, clave, CUIT y
-            punto de venta estén habilitados en ARCA.
-          </p>
-          <Button className="mt-5" onClick={save}>
-            <Save className="h-4 w-4" /> Guardar configuración ARCA
-          </Button>
-        </Card>
-      )}
+        <ArcaPanel form={form} set={set} save={save} status={status} />
+      )}{" "}
       {tab === "usuarios" && (
         <Card className="divide-y">
           {users.map((u) => (
@@ -248,7 +778,6 @@ export default function ConfiguracionPage() {
           ))}
         </Card>
       )}
-      {status && <p className="text-sm text-muted-foreground">{status}</p>}
     </div>
   );
 }
