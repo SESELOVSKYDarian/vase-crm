@@ -1,27 +1,19 @@
 import { NextResponse } from "next/server";
-import { randomBytes, scryptSync } from "node:crypto";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { userSchema } from "@/lib/validation";
+import { hashPassword, requirePermission } from "@/lib/auth";
+import { writeAudit } from "@/lib/audit";
+import { assertSameOrigin } from "@/lib/security/csrf";
 
-export async function POST(request: Request) {
-  try {
-    const parsed = userSchema.safeParse(await request.json());
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
-    const { name, email, password, role, active } = parsed.data;
-    const salt = randomBytes(16).toString("hex");
-    const passwordHash = `${salt}:${scryptSync(password, salt, 64).toString("hex")}`;
-    const user = await prisma.user.create({ data: { name, email, passwordHash, role, active }, select: { id: true, name: true, email: true, role: true, active: true } });
-    return NextResponse.json(user, { status: 201 });
-  } catch (error: unknown) {
-    if (typeof error === "object" && error && "code" in error && error.code === "P2002") return NextResponse.json({ error: "El email ya está registrado" }, { status: 409 });
-    return NextResponse.json({ error: "No se pudo crear el usuario. Verificá la conexión a la base de datos." }, { status: 500 });
-  }
-}
+const payload = z.object({ id: z.string().optional(), name: z.string().trim().min(2), email: z.string().trim().email(), password: z.string().min(8).optional(), active: z.boolean().optional(), roleIds: z.array(z.string()).min(1) });
+const userSelect = { id: true, name: true, email: true, role: true, active: true, userRoles: { include: { role: { select: { id: true, name: true, active: true } } } } } as const;
+const failure = (error: unknown) => NextResponse.json({ error: error instanceof Error && error.message === "LAST_ADMIN" ? "No podés desactivar al último administrador activo." : error instanceof z.ZodError ? error.issues[0]?.message : "No se pudo guardar el usuario." }, { status: 400 });
 
-export async function GET() {
-  const users = await prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, active: true }, orderBy: { name: "asc" } });
-  return NextResponse.json(users);
-}
+async function assertRoles(roleIds: string[]) { const roles = await prisma.roleDefinition.findMany({ where: { id: { in: roleIds }, active: true }, select: { id: true } }); if (roles.length !== roleIds.length) throw new Error("INVALID_ROLE"); return roles; }
+async function assertAdminRemains(userId: string, active: boolean, roleIds: string[]) { const admin = await prisma.roleDefinition.findUnique({ where: { name: "ADMIN" } }); if (!admin || (active && roleIds.includes(admin.id))) return; const otherAdmins = await prisma.userRole.count({ where: { roleId: admin.id, user: { active: true, id: { not: userId } } } }); if (!otherAdmins) throw new Error("LAST_ADMIN"); }
 
-export async function PATCH(request: Request) { try { const body = await request.json(); const data: any = {}; if (body.name) data.name = body.name; if (body.email) data.email = body.email; if (typeof body.active === "boolean") data.active = body.active; if (body.role) data.role = body.role; const user = await prisma.user.update({ where: { id: body.id }, data, select: { id: true, name: true, email: true, role: true, active: true } }); return NextResponse.json(user); } catch { return NextResponse.json({ error: "No se pudo editar el usuario" }, { status: 400 }); } }
-export async function DELETE(request: Request) { try { const id = new URL(request.url).searchParams.get("id"); if (!id) throw new Error(); const count = await prisma.user.count({ where: { role: "ADMIN", active: true } }); const target = await prisma.user.findUnique({ where: { id } }); if (target?.role === "ADMIN" && count <= 1) return NextResponse.json({ error: "No podés eliminar al último administrador" }, { status: 409 }); await prisma.user.delete({ where: { id } }); return NextResponse.json({ ok: true }); } catch { return NextResponse.json({ error: "No se pudo eliminar el usuario" }, { status: 400 }); } }
+export async function GET() { try { await requirePermission("users.view"); return NextResponse.json(await prisma.user.findMany({ select: userSelect, orderBy: { name: "asc" } })); } catch (error) { return NextResponse.json({ error: error instanceof Error && error.message === "UNAUTHENTICATED" ? "Sesión requerida" : "No tenés permiso para ver usuarios" }, { status: error instanceof Error && error.message === "UNAUTHENTICATED" ? 401 : 403 }); } }
+
+export async function POST(request: Request) { try { assertSameOrigin(request); const actor = await requirePermission("users.manage"); const input = payload.extend({ password: z.string().min(8) }).parse(await request.json()); const roles = await assertRoles(input.roleIds); const user = await prisma.user.create({ data: { name: input.name, email: input.email.toLowerCase(), passwordHash: hashPassword(input.password), role: "ADMINISTRACION", active: input.active ?? true, userRoles: { create: roles.map((role) => ({ roleId: role.id })) } }, select: userSelect }); await writeAudit(actor.id, "USER_CREATED", "User", user.id, undefined, { name: user.name, roleIds: input.roleIds }); return NextResponse.json(user, { status: 201 }); } catch (error) { return failure(error); } }
+
+export async function PATCH(request: Request) { try { assertSameOrigin(request); const actor = await requirePermission("users.manage"); const input = payload.parse(await request.json()); if (!input.id) return NextResponse.json({ error: "Falta el usuario." }, { status: 400 }); const before = await prisma.user.findUnique({ where: { id: input.id }, select: userSelect }); if (!before) return NextResponse.json({ error: "Usuario inexistente." }, { status: 404 }); await assertAdminRemains(input.id, input.active ?? before.active, input.roleIds); const roles = await assertRoles(input.roleIds); const user = await prisma.$transaction(async (tx) => { if (input.active === false) await tx.session.updateMany({ where: { userId: input.id, revokedAt: null }, data: { revokedAt: new Date() } }); return tx.user.update({ where: { id: input.id }, data: { name: input.name, email: input.email.toLowerCase(), active: input.active ?? before.active, ...(input.password ? { passwordHash: hashPassword(input.password) } : {}), userRoles: { deleteMany: {}, create: roles.map((role) => ({ roleId: role.id })) } }, select: userSelect }); }); await writeAudit(actor.id, input.active === false ? "USER_DISABLED" : "USER_UPDATED", "User", user.id, { roles: before.userRoles.map((entry) => entry.role.id) }, { roles: input.roleIds, active: user.active }); return NextResponse.json(user); } catch (error) { return failure(error); } }

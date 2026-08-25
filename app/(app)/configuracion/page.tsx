@@ -16,6 +16,7 @@ import {
   Save,
   ShieldCheck,
   Upload,
+  UserPlus,
   XCircle,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
@@ -726,6 +727,13 @@ function TestButton({ label, action, running, onClick }: any) {
   );
 }
 
+function UserManagement({ users, roles, onRefresh }: { users: any[]; roles: any[]; onRefresh: () => void }) {
+  const [open, setOpen] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState({ name: "", email: "", password: "", roleIds: [] as string[], active: true });
+  async function submit() { setSaving(true); setError(""); const response = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) }); const body = await response.json().catch(() => null); setSaving(false); if (!response.ok) return setError(body?.error ?? "No se pudo crear el usuario."); setOpen(false); setDraft({ name: "", email: "", password: "", roleIds: [], active: true }); onRefresh(); }
+  return <><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Usuarios</h2><p className="text-sm text-muted-foreground">Roles acumulativos y acceso inmediato.</p></div><Button onClick={() => setOpen(true)}><UserPlus className="h-4 w-4" /> Nuevo usuario</Button></div><Card className="divide-y">{users.map((user) => <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 p-4"><div><p className="font-medium">{user.name}</p><p className="text-xs text-muted-foreground">{user.email}</p><div className="mt-2 flex flex-wrap gap-1">{user.userRoles?.map((entry: any) => <Badge key={entry.role.id}>{entry.role.name}</Badge>)}</div></div><Badge>{user.active ? "Activo" : "Inactivo"}</Badge></div>)}{!users.length && <p className="p-8 text-center text-sm text-muted-foreground">No hay usuarios configurados.</p>}</Card><Modal open={open} onClose={() => setOpen(false)} title="Nuevo usuario" description="Asigná uno o varios roles operativos." footer={<><Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button disabled={saving} onClick={submit}>{saving ? "Creando…" : "Crear usuario"}</Button></>}><div className="grid gap-4"><div><Label>Nombre completo</Label><Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div><div><Label>Email</Label><Input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></div><div><Label>Contraseña inicial</Label><Input type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} /></div><fieldset><legend className="mb-2 text-sm font-medium">Roles</legend><div className="grid gap-2 sm:grid-cols-2">{roles.filter((role) => role.active).map((role) => <label key={role.id} className="flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-sm"><input type="checkbox" checked={draft.roleIds.includes(role.id)} onChange={() => setDraft({ ...draft, roleIds: draft.roleIds.includes(role.id) ? draft.roleIds.filter((id) => id !== role.id) : [...draft.roleIds, role.id] })} />{role.name}</label>)}</div></fieldset>{error && <p role="alert" className="text-sm text-red-600">{error}</p>}</div></Modal></>;
+}
+
 export default function ConfiguracionPage() {
   const [tab, setTab] = useState("empresa"),
     [form, setForm] = useState<Settings>({
@@ -852,19 +860,7 @@ export default function ConfiguracionPage() {
       {tab === "arca" && (
         <ArcaPanel form={form} set={set} save={save} status={status} />
       )}{" "}
-      {tab === "usuarios" && (
-        <Card className="divide-y">
-          {users.map((u) => (
-            <div key={u.id} className="flex justify-between p-4">
-              <span>
-                <b>{u.name}</b>
-                <small className="ml-2 text-muted-foreground">{u.email}</small>
-              </span>
-              <Badge>{u.active ? "Activo" : "Inactivo"}</Badge>
-            </div>
-          ))}
-        </Card>
-      )}
+      {tab === "usuarios" && <UserManagement users={users} roles={roles} onRefresh={() => fetch("/api/users").then((r) => r.ok ? r.json() : []).then(setUsers)} />}
       {tab === "roles" && (
         <Card className="divide-y">
           {roles.map((r) => (

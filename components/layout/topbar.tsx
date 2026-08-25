@@ -35,23 +35,10 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [results, setResults] = useState<any>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [readNotifications, setReadNotifications] = useState<string[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [user, setUser] = useState<any>(null);
   const { theme, toggle } = useTheme();
-  const notifications = [
-    {
-      id: "ot",
-      title: "OT-2001 está atrasada",
-      detail: "Torre Rivadavia · Piso 8",
-      href: "/produccion",
-    },
-    {
-      id: "pay",
-      title: "Factura pendiente de cobro",
-      detail: "0003-00012845",
-      href: "/facturacion",
-    },
-  ];
   const groups: ResultGroup[] = [
     {
       key: "clients",
@@ -89,11 +76,7 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => data && setUser(data.user));
-    try {
-      setReadNotifications(
-        JSON.parse(localStorage.getItem("vase-crm-read-notifications") ?? "[]"),
-      );
-    } catch {}
+    fetch("/api/notifications").then((r) => r.ok ? r.json() : null).then((payload) => { setNotifications(payload?.data ?? []); setUnreadCount(payload?.unreadCount ?? 0); });
   }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -120,10 +103,9 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
       setResults({});
     }
   }
-  function markAllRead() {
-    const ids = notifications.map((item) => item.id);
-    setReadNotifications(ids);
-    localStorage.setItem("vase-crm-read-notifications", JSON.stringify(ids));
+  async function markAllRead() {
+    await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) });
+    setNotifications((items) => items.map((item) => ({ ...item, readAt: new Date().toISOString() }))); setUnreadCount(0);
   }
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -224,7 +206,7 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
             className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-vase-green"
           >
             <Bell className="h-4 w-4" />
-            {readNotifications.length < notifications.length && (
+            {unreadCount > 0 && (
               <span className="absolute right-2.5 top-2 h-1.5 w-1.5 rounded-full bg-vase-green ring-2 ring-card" />
             )}
           </button>
@@ -242,16 +224,17 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
               {notifications.map((item) => (
                 <Link
                   key={item.id}
-                  href={item.href}
-                  onClick={() => setShowNotifications(false)}
-                  className={`block border-b border-border px-4 py-3 transition-colors last:border-0 hover:bg-secondary ${readNotifications.includes(item.id) ? "opacity-60" : ""}`}
+                  href={item.entityType === "WorkOrder" ? "/produccion" : "/dashboard"}
+                  onClick={async () => { await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id }) }); setShowNotifications(false); }}
+                  className={`block border-b border-border px-4 py-3 transition-colors last:border-0 hover:bg-secondary ${item.readAt ? "opacity-60" : ""}`}
                 >
                   <p className="text-sm font-medium">{item.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {item.detail}
+                    {item.message}
                   </p>
                 </Link>
               ))}
+              {!notifications.length && <p className="p-5 text-center text-sm text-muted-foreground">No tenés notificaciones nuevas.</p>}
             </div>
           )}
         </div>

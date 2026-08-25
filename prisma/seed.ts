@@ -16,16 +16,38 @@ import { clients, priceList, quotes, workOrders } from "../lib/mock-data";
 const prisma = new PrismaClient();
 
 async function main() {
+  const permissionKeys = [
+    "users.view", "users.manage", "users.roles.manage", "clients.view", "clients.create", "clients.edit", "clients.delete",
+    "quotes.view", "quotes.create", "quotes.edit", "quotes.delete", "quotes.send", "quotes.approve", "quotes.reject",
+    "prices.view", "prices.manage", "production.view_all", "production.view_assigned", "production.assign", "production.update_assigned", "production.work_order.status.update", "production.progress.view", "production.cut.progress.update", "production.assembly.progress.update", "production.production.progress.update",
+    "deliveries.view", "deliveries.create", "deliveries.edit", "remitos.view", "remitos.create", "remitos.confirm", "remitos.cancel", "invoices.view", "invoices.create", "invoices.authorize", "payments.view", "payments.create", "payments.edit", "payments.cancel", "account.view", "account.manage", "analytics.view", "notifications.view", "notifications.manage_own", "company.settings.manage", "arca.settings.manage", "arca.connection.test", "arca.invoice.test",
+  ];
+  const permissions = await Promise.all(permissionKeys.map((key) => prisma.permission.upsert({ where: { key }, update: {}, create: { key, module: key.split(".")[0], action: key.split(".").slice(1).join("."), description: key } })));
+  const byKey = new Map(permissions.map((permission) => [permission.key, permission.id]));
+  const rolePermissions: Record<string, string[]> = {
+    ADMIN: permissionKeys,
+    ATENCION_CLIENTE: ["clients.view", "clients.create", "clients.edit", "clients.delete", "quotes.view", "quotes.create", "quotes.edit", "quotes.delete", "quotes.send", "quotes.approve", "quotes.reject", "prices.view", "prices.manage", "production.view_all", "production.assign", "deliveries.view", "deliveries.create", "deliveries.edit", "remitos.view", "remitos.create", "remitos.confirm", "remitos.cancel", "invoices.view", "invoices.create", "invoices.authorize", "payments.view", "payments.create", "payments.edit", "payments.cancel", "account.view", "account.manage", "analytics.view", "notifications.view", "notifications.manage_own"],
+    CORTADOR: ["production.view_assigned", "production.update_assigned", "production.progress.view", "production.cut.progress.update", "notifications.view", "notifications.manage_own"],
+    ARMADOR: ["production.view_assigned", "production.update_assigned", "production.progress.view", "production.assembly.progress.update", "notifications.view", "notifications.manage_own"],
+  };
+  const roles = new Map<string, string>();
+  for (const [name, keys] of Object.entries(rolePermissions)) {
+    const role = await prisma.roleDefinition.upsert({ where: { name }, update: { system: true, active: true }, create: { name, system: true, active: true, description: name === "ATENCION_CLIENTE" ? "Administración comercial y operativa" : name } });
+    roles.set(name, role.id);
+    await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+    await prisma.rolePermission.createMany({ data: keys.map((key) => ({ roleId: role.id, permissionId: byKey.get(key)! })), skipDuplicates: true });
+  }
   for (const nombre of ["SIMPLE", "DVH", "TEMPLADO", "PULIDO", "SOLO_CORTE", "DISTRIBUCION"]) {
     await prisma.productCategoryDefinition.upsert({ where: { nombre }, update: { activa: true }, create: { nombre, sistema: true, activa: true } });
   }
   const salt = randomBytes(16).toString("hex");
   const passwordHash = `${salt}:${scryptSync("Admin1234!", salt, 64).toString("hex")}`;
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: "admin@vasecrm.com" },
     update: { active: true, role: "ADMIN" },
     create: { name: "Administrador Vase CRM", email: "admin@vasecrm.com", passwordHash, role: "ADMIN", active: true },
   });
+  await prisma.userRole.upsert({ where: { userId_roleId: { userId: admin.id, roleId: roles.get("ADMIN")! } }, update: {}, create: { userId: admin.id, roleId: roles.get("ADMIN")! } });
   console.log("Administrador creado: admin@vasecrm.com");
   console.log("Seed de referencia — adaptar a datos reales migrados desde Excel.");
   const seededClients = new Map<string, string>();

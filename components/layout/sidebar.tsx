@@ -19,22 +19,22 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/clientes", label: "Clientes", icon: Users },
-  { href: "/presupuestos", label: "Presupuestos", icon: FileText },
-  { href: "/produccion", label: "Producción", icon: Factory },
-  { href: "/entregas", label: "Entregas", icon: Truck },
-  { href: "/remitos", label: "Remitos", icon: ClipboardList },
-  { href: "/facturacion", label: "Facturación", icon: Receipt },
-  { href: "/cobros", label: "Cobros", icon: Wallet },
-  { href: "/cuenta-corriente", label: "Cuenta corriente", icon: BookText },
-  { href: "/analiticas", label: "Analíticas", icon: BarChart3 },
-  { href: "/precios", label: "Precios", icon: Tag },
-  { href: "/configuracion", label: "Configuración", icon: Settings },
+  { href: "/clientes", label: "Clientes", icon: Users, permission: "clients.view" },
+  { href: "/presupuestos", label: "Presupuestos", icon: FileText, permission: "quotes.view" },
+  { href: "/produccion", label: "Producción", icon: Factory, permission: "production" },
+  { href: "/entregas", label: "Entregas", icon: Truck, permission: "deliveries.view" },
+  { href: "/remitos", label: "Remitos", icon: ClipboardList, permission: "remitos.view" },
+  { href: "/facturacion", label: "Facturación", icon: Receipt, permission: "invoices.view" },
+  { href: "/cobros", label: "Cobros", icon: Wallet, permission: "payments.view" },
+  { href: "/cuenta-corriente", label: "Cuenta corriente", icon: BookText, permission: "account.view" },
+  { href: "/analiticas", label: "Analíticas", icon: BarChart3, permission: "analytics.view" },
+  { href: "/precios", label: "Precios", icon: Tag, permission: "prices.view" },
+  { href: "/configuracion", label: "Configuración", icon: Settings, permission: "company.settings.manage" },
 ];
 
 type SidebarProps = {
@@ -50,9 +50,11 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState(false);
+  const [permissions, setPermissions] = useState<string[] | null>(null);
   const reduceMotion = useReducedMotion();
   const expanded = !collapsed || hovered;
   const width = expanded ? 280 : 76;
+  useEffect(() => { fetch("/api/auth/me").then((response) => response.ok ? response.json() : null).then((payload) => setPermissions(payload?.user?.permissions ?? [])); }, []);
 
   return (
     <>
@@ -128,7 +130,11 @@ export function Sidebar({
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
-            {nav.map((item) => {
+            {nav.filter((item) => {
+              if (!item.permission || permissions === null) return true;
+              if (item.permission === "production") return permissions.some((permission) => permission === "production.view_all" || permission === "production.view_assigned");
+              return permissions.includes(item.permission);
+            }).map((item) => {
               const active =
                 pathname === item.href || pathname?.startsWith(`${item.href}/`);
               const Icon = item.icon;
