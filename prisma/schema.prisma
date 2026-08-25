@@ -764,5 +764,8 @@ model CompanySettings {
   arcaEnvironment String  @default("HOMOLOGACION")
   arcaCuit        String?
   arcaPuntoVenta  Int?
+  arcaCertificate String? @db.LongText
+  arcaPrivateKey  String? @db.LongText
+  arcaService     String  @default("wsfe")
   logoData        String? @db.LongText
 }
