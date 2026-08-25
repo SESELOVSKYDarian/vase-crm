@@ -6,7 +6,10 @@ export function useTheme() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? window.localStorage.getItem("vase-theme") : null;
+    const stored =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("vase-theme")
+        : null;
     const initial = stored === "dark" ? "dark" : "light";
     setTheme(initial);
     document.documentElement.classList.toggle("dark", initial === "dark");
@@ -15,7 +18,10 @@ export function useTheme() {
   const toggle = useCallback(() => {
     setTheme((prev) => {
       const next = prev === "dark" ? "light" : "dark";
-      document.documentElement.classList.toggle("dark", next === "dark");
+      const root = document.documentElement;
+      root.classList.add("theme-transition");
+      root.classList.toggle("dark", next === "dark");
+      window.setTimeout(() => root.classList.remove("theme-transition"), 240);
       window.localStorage.setItem("vase-theme", next);
       return next;
     });

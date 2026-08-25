@@ -101,6 +101,21 @@
 
 @keyframes loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
 
+@keyframes theme-icon-in { from { opacity: 0; transform: rotate(-18deg) scale(.78); } to { opacity: 1; transform: rotate(0) scale(1); } }
+
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 220ms ease, border-color 220ms ease, color 180ms ease, box-shadow 220ms ease !important;
+}
+.theme-toggle-icon { animation: theme-icon-in 180ms cubic-bezier(.22,1,.36,1); }
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition, html.theme-transition *, html.theme-transition *::before, html.theme-transition *::after { transition: none !important; }
+  .theme-toggle-icon { animation: none; }
+}
+
 @media print {
   @page { size: A4; margin: 12mm; }
   html, body { background: #fff !important; color: #000 !important; }
