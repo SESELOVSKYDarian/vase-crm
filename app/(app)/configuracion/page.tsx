@@ -153,7 +153,7 @@ function ArcaPanel({
       setPkcs12File(null);
       setPkcs12Password("");
       if (pkcs12Ref.current) pkcs12Ref.current.value = "";
-      setPkcs12Status("Credenciales importadas correctamente.");
+      setPkcs12Status(payload.compatibilityUsed ? "Credenciales importadas correctamente. Certificado y clave privada verificados en modo de compatibilidad." : "Credenciales importadas correctamente. Certificado y clave privada verificados.");
       refresh();
     } else setPkcs12Status(payload?.error ?? "No se pudieron importar las credenciales.");
     setRunning("");
