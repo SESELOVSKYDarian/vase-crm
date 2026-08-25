@@ -773,6 +773,7 @@ model CompanySettings {
   arcaCertificateSerial String?
   arcaCertificateValidFrom DateTime?
   arcaCertificateValidTo DateTime?
+  arcaCredentialSource String?
   arcaLastConnectionTestAt DateTime?
   arcaLastConnectionStatus String?
   arcaLastConnectionMessage String? @db.Text

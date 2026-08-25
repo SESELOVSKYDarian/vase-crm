@@ -43,6 +43,7 @@ const responseSettings = (settings: any) =>
     arcaCertificateSerial: settings.arcaCertificateSerial,
     arcaCertificateValidFrom: settings.arcaCertificateValidFrom,
     arcaCertificateValidTo: settings.arcaCertificateValidTo,
+    arcaCredentialSource: settings.arcaCredentialSource,
     arcaLastConnectionTestAt: settings.arcaLastConnectionTestAt,
     arcaLastConnectionStatus: settings.arcaLastConnectionStatus,
     arcaLastConnectionMessage: settings.arcaLastConnectionMessage,
@@ -155,6 +156,7 @@ export async function PUT(request: Request) {
         arcaCertificateSerial: null,
         arcaCertificateValidFrom: null,
         arcaCertificateValidTo: null,
+        arcaCredentialSource: null,
       });
     else if (suppliedCertificate)
       Object.assign(data, {
@@ -164,6 +166,7 @@ export async function PUT(request: Request) {
         arcaCertificateSerial: metadata.serial,
         arcaCertificateValidFrom: metadata.validFrom,
         arcaCertificateValidTo: metadata.validTo,
+        arcaCredentialSource: "MANUAL",
       });
     if (body.deleteArcaPrivateKey) data.arcaPrivateKey = null;
     else if (suppliedKey) data.arcaPrivateKey = encryptSecret(suppliedKey);

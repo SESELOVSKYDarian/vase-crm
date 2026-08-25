@@ -17,6 +17,7 @@ export async function GET() {
       puntoVenta: settings?.arcaPuntoVenta ?? null,
       certificateConfigured: Boolean(settings?.arcaCertificate),
       privateKeyConfigured: Boolean(settings?.arcaPrivateKey),
+      credentialSource: settings?.arcaCredentialSource ?? null,
       certificate: settings?.arcaCertificateSubject
         ? {
             subject: settings.arcaCertificateSubject,
