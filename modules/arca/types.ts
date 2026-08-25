@@ -13,7 +13,12 @@ export type ArcaVoucherType =
   | "NOTA_CREDITO_A"
   | "NOTA_CREDITO_B"
   | "NOTA_DEBITO_A"
-  | "NOTA_DEBITO_B";
+  | "NOTA_DEBITO_B"
+  | "NOTA_CREDITO_C" | "NOTA_DEBITO_C"
+  | "FACTURA_M" | "NOTA_CREDITO_M" | "NOTA_DEBITO_M"
+  | "FCE_FACTURA_A" | "FCE_NOTA_DEBITO_A" | "FCE_NOTA_CREDITO_A"
+  | "FCE_FACTURA_B" | "FCE_NOTA_DEBITO_B" | "FCE_NOTA_CREDITO_B"
+  | "FCE_FACTURA_C" | "FCE_NOTA_DEBITO_C" | "FCE_NOTA_CREDITO_C";
 
 export interface ArcaInvoiceRequest {
   /** Idempotency key estable: ej. `invoice:{invoiceId}`. Nunca debe repetirse una autorización para la misma key. */
@@ -22,7 +27,8 @@ export interface ArcaInvoiceRequest {
   puntoVenta: number;
   voucherType: ArcaVoucherType;
   cuitEmisor: string;
-  clienteDocTipo: "CUIT" | "DNI" | "CONSUMIDOR_FINAL";
+  clienteDocTipo: string;
+  clienteDocCode?: number;
   clienteDocNumero: string;
   condicionIvaReceptor: string;
   fecha: string; // ISO
@@ -33,6 +39,8 @@ export interface ArcaInvoiceRequest {
   moneda: "PES" | "DOL";
   cotizacionMoneda: number;
   conceptos: "PRODUCTOS" | "SERVICIOS" | "PRODUCTOS_Y_SERVICIOS";
+  ivaId?: number;
+  associatedVoucher?: { voucherType: ArcaVoucherType; puntoVenta: number; numero: number; cuit?: string; fecha?: string };
 }
 
 export interface ArcaInvoiceResult {

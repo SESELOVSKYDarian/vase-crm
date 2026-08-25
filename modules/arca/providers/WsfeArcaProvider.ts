@@ -9,6 +9,7 @@ import {
 import { escapeXml, soapCall, tag, tags } from "../soap";
 import { createTra } from "../wsaa/create-tra";
 import { signTra } from "../wsaa/sign-tra";
+import { ARCA_VOUCHER_CODE_BY_KEY, requiresAssociatedVoucher } from "../vouchers";
 import type {
   ArcaEnvironment,
   ArcaInvoiceProvider,
@@ -18,17 +19,9 @@ import type {
   ArcaVoucherType,
 } from "../types";
 
-const voucherCodes: Record<ArcaVoucherType, number> = {
-  FACTURA_A: 1,
-  FACTURA_B: 6,
-  FACTURA_C: 11,
-  NOTA_CREDITO_A: 3,
-  NOTA_CREDITO_B: 8,
-  NOTA_DEBITO_A: 2,
-  NOTA_DEBITO_B: 7,
-};
 const documentCodes: Record<string, number> = {
   CUIT: 80,
+  CUIL: 86,
   DNI: 96,
   CONSUMIDOR_FINAL: 99,
 };
@@ -132,12 +125,33 @@ export class WsfeArcaProvider implements ArcaInvoiceProvider {
       service: this.service,
     };
   }
+  /** Recupera parámetros desde WSFEv1 con el TA vigente; no expone credenciales. */
+  async getParameters() {
+    const ticket = await this.ticket();
+    const list = async (operation: string, element: string) => {
+      const response = await soapCall(
+        ARCA_ENDPOINTS[this.environment].wsfe,
+        `http://ar.gov.afip.dif.FEV1/${operation}`,
+        envelope(operation, authXml(ticket, this.cuit)),
+      );
+      return tags(response, element).map((raw) => ({
+        code: Number(tag(raw, "Id")),
+        label: tag(raw, "Desc") ?? `Código ${tag(raw, "Id") ?? ""}`,
+      })).filter((item) => Number.isFinite(item.code));
+    };
+    const [voucherTypes, documentTypes, ivaTypes] = await Promise.all([
+      list("FEParamGetTiposCbte", "CbteTipo"),
+      list("FEParamGetTiposDoc", "DocTipo"),
+      list("FEParamGetTiposIva", "IvaTipo"),
+    ]);
+    return { voucherTypes, documentTypes, ivaTypes };
+  }
   async getLastAuthorizedVoucher(
     puntoVenta: number,
     voucherType: ArcaVoucherType,
   ): Promise<ArcaLastVoucherInfo> {
     const ticket = await this.ticket(),
-      code = voucherCodes[voucherType];
+      code = ARCA_VOUCHER_CODE_BY_KEY[voucherType];
     const response = await soapCall(
       ARCA_ENDPOINTS[this.environment].wsfe,
       "http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado",
@@ -161,7 +175,7 @@ export class WsfeArcaProvider implements ArcaInvoiceProvider {
     request: ArcaInvoiceRequest,
   ): Promise<ArcaInvoiceResult> {
     const ticket = await this.ticket(),
-      voucherCode = voucherCodes[request.voucherType],
+      voucherCode = ARCA_VOUCHER_CODE_BY_KEY[request.voucherType],
       number =
         (
           await this.getLastAuthorizedVoucher(
@@ -170,8 +184,16 @@ export class WsfeArcaProvider implements ArcaInvoiceProvider {
           )
         ).ultimoNumeroAutorizado + 1;
     const date = request.fecha.replaceAll("-", "").slice(0, 8),
-      docCode = documentCodes[request.clienteDocTipo];
-    const content = `${authXml(ticket, request.cuitEmisor)}<FeCAEReq><FeCabReq><CantReg>1</CantReg><PtoVta>${request.puntoVenta}</PtoVta><CbteTipo>${voucherCode}</CbteTipo></FeCabReq><FeDetReq><FECAEDetRequest><Concepto>${request.conceptos === "PRODUCTOS" ? 1 : request.conceptos === "SERVICIOS" ? 2 : 3}</Concepto><DocTipo>${docCode}</DocTipo><DocNro>${escapeXml(request.clienteDocNumero)}</DocNro><CbteDesde>${number}</CbteDesde><CbteHasta>${number}</CbteHasta><CbteFch>${date}</CbteFch><ImpTotal>${request.importeTotal.toFixed(2)}</ImpTotal><ImpTotConc>0</ImpTotConc><ImpNeto>${request.importeNeto.toFixed(2)}</ImpNeto><ImpOpEx>0</ImpOpEx><ImpTrib>${request.importeTributos.toFixed(2)}</ImpTrib><ImpIVA>${request.importeIva.toFixed(2)}</ImpIVA><MonId>${request.moneda}</MonId><MonCotiz>${request.cotizacionMoneda.toFixed(6)}</MonCotiz><Iva><AlicIva><Id>5</Id><BaseImp>${request.importeNeto.toFixed(2)}</BaseImp><Importe>${request.importeIva.toFixed(2)}</Importe></AlicIva></Iva></FECAEDetRequest></FeDetReq></FeCAEReq>`;
+      docCode = request.clienteDocCode ?? documentCodes[request.clienteDocTipo];
+    if (!voucherCode || !docCode) throw new ArcaConfigurationError("El código de comprobante o documento no es válido.");
+    if (requiresAssociatedVoucher(request.voucherType) && !request.associatedVoucher)
+      throw new ArcaConfigurationError("Las notas de crédito y débito requieren un comprobante asociado.");
+    const associated = request.associatedVoucher
+      ? `<CbtesAsoc><CbteAsoc><Tipo>${ARCA_VOUCHER_CODE_BY_KEY[request.associatedVoucher.voucherType]}</Tipo><PtoVta>${request.associatedVoucher.puntoVenta}</PtoVta><Nro>${request.associatedVoucher.numero}</Nro>${request.associatedVoucher.cuit ? `<Cuit>${escapeXml(request.associatedVoucher.cuit)}</Cuit>` : ""}${request.associatedVoucher.fecha ? `<CbteFch>${escapeXml(request.associatedVoucher.fecha.replaceAll("-", ""))}</CbteFch>` : ""}</CbteAsoc></CbtesAsoc>`
+      : "";
+    const iva = request.importeIva > 0
+      ? `<Iva><AlicIva><Id>${request.ivaId ?? 5}</Id><BaseImp>${request.importeNeto.toFixed(2)}</BaseImp><Importe>${request.importeIva.toFixed(2)}</Importe></AlicIva></Iva>` : "";
+    const content = `${authXml(ticket, request.cuitEmisor)}<FeCAEReq><FeCabReq><CantReg>1</CantReg><PtoVta>${request.puntoVenta}</PtoVta><CbteTipo>${voucherCode}</CbteTipo></FeCabReq><FeDetReq><FECAEDetRequest><Concepto>${request.conceptos === "PRODUCTOS" ? 1 : request.conceptos === "SERVICIOS" ? 2 : 3}</Concepto><DocTipo>${docCode}</DocTipo><DocNro>${escapeXml(request.clienteDocNumero)}</DocNro><CbteDesde>${number}</CbteDesde><CbteHasta>${number}</CbteHasta><CbteFch>${date}</CbteFch>${associated}<ImpTotal>${request.importeTotal.toFixed(2)}</ImpTotal><ImpTotConc>0</ImpTotConc><ImpNeto>${request.importeNeto.toFixed(2)}</ImpNeto><ImpOpEx>0</ImpOpEx><ImpTrib>${request.importeTributos.toFixed(2)}</ImpTrib><ImpIVA>${request.importeIva.toFixed(2)}</ImpIVA><MonId>${request.moneda}</MonId><MonCotiz>${request.cotizacionMoneda.toFixed(6)}</MonCotiz>${iva}</FECAEDetRequest></FeDetReq></FeCAEReq>`;
     const response = await soapCall(
       ARCA_ENDPOINTS[this.environment].wsfe,
       "http://ar.gov.afip.dif.FEV1/FECAESolicitar",
@@ -225,7 +247,7 @@ export class WsfeArcaProvider implements ArcaInvoiceProvider {
       "http://ar.gov.afip.dif.FEV1/FECompConsultar",
       envelope(
         "FECompConsultar",
-        `${authXml(ticket, this.cuit)}<FeCompConsReq><CbteTipo>${voucherCodes[voucherType]}</CbteTipo><CbteNro>${number}</CbteNro><PtoVta>${puntoVenta}</PtoVta></FeCompConsReq>`,
+        `${authXml(ticket, this.cuit)}<FeCompConsReq><CbteTipo>${ARCA_VOUCHER_CODE_BY_KEY[voucherType]}</CbteTipo><CbteNro>${number}</CbteNro><PtoVta>${puntoVenta}</PtoVta></FeCompConsReq>`,
       ),
     );
     return response;

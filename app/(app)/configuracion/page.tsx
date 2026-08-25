@@ -19,6 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
+import { ARCA_DOCUMENT_TYPES, ARCA_IVA_TYPES, ARCA_VOUCHER_TYPES, requiresAssociatedVoucher } from "@/modules/arca/vouchers";
 
 type Settings = Record<string, any>;
 function readPem(file: File, set: (value: string) => void) {
@@ -50,13 +51,20 @@ function ArcaPanel({
     [pkcs12Password, setPkcs12Password] = useState(""),
     [pkcs12Status, setPkcs12Status] = useState(""),
     [testInvoiceOpen, setTestInvoiceOpen] = useState(false),
+    [arcaParameters, setArcaParameters] = useState<any>({ data: ARCA_VOUCHER_TYPES, documents: ARCA_DOCUMENT_TYPES, ivaTypes: ARCA_IVA_TYPES, source: "FALLBACK" }),
     [testInvoice, setTestInvoice] = useState({
+      voucherType: "FACTURA_A",
       clienteDocTipo: "CUIT",
+      clienteDocCode: 80,
       clienteDocNumero: "",
       importeNeto: "",
       importeIva: "",
       importeTributos: "0",
+      ivaId: 5,
       fecha: new Date().toISOString().slice(0, 10),
+      associatedVoucherType: "FACTURA_A",
+      associatedPuntoVenta: "",
+      associatedNumero: "",
     });
   const refresh = () =>
     fetch("/api/arca/status")
@@ -68,6 +76,13 @@ function ArcaPanel({
   useEffect(() => {
     if (form.arcaCredentialSource === "PKCS12") setCredentialMethod("PKCS12");
   }, [form.arcaCredentialSource]);
+  useEffect(() => {
+    if (!testInvoiceOpen) return;
+    fetch("/api/arca/parameters/voucher-types")
+      .then((response) => response.json())
+      .then((payload) => payload?.data && setArcaParameters(payload))
+      .catch(() => undefined);
+  }, [testInvoiceOpen]);
   async function test(action: string) {
     setRunning(action);
     setResult(null);
@@ -76,7 +91,7 @@ function ArcaPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         puntoVenta: form.arcaPuntoVenta,
-        voucherType: "FACTURA_A",
+        voucherType: testInvoice.voucherType,
       }),
     });
     const payload = await response.json().catch(() => null);
@@ -117,6 +132,9 @@ function ArcaPanel({
         moneda: "PES",
         cotizacionMoneda: 1,
         conceptos: "PRODUCTOS",
+        associatedVoucher: requiresAssociatedVoucher(testInvoice.voucherType as any)
+          ? { voucherType: testInvoice.associatedVoucherType, puntoVenta: Number(testInvoice.associatedPuntoVenta), numero: Number(testInvoice.associatedNumero) }
+          : undefined,
       }),
     });
     const payload = await response.json().catch(() => null);
@@ -389,6 +407,13 @@ function ArcaPanel({
                   {result.lastVoucher.puntoVenta}
                 </p>
               )}
+              {result.voucher && (
+                <p className="mt-2 font-medium">Comprobante solicitado: {result.voucher.code} — {result.voucher.label}</p>
+              )}
+              {result.numeroComprobante && (
+                <p className="mt-1">Autorizado/rechazado como N.º {result.numeroComprobante}{result.cae ? ` · CAE ${result.cae}` : ""}.</p>
+              )}
+              {result.errores?.length > 0 && <ul className="mt-2 list-disc pl-5">{result.errores.map((error: any) => <li key={`${error.codigo}-${error.mensaje}`}>{error.codigo}: {error.mensaje}</li>)}</ul>}
             </div>
           )}
         </Card>
@@ -525,22 +550,22 @@ function ArcaPanel({
           </div>
           <div>
             <Label>Tipo comprobante</Label>
-            <Input value="Factura A" disabled />
+            <Select value={testInvoice.voucherType} onChange={(e) => setTestInvoice({ ...testInvoice, voucherType: e.target.value })}>
+              {["A", "B", "C", "M", "FCE MiPyME"].map((group) => (
+                <optgroup key={group} label={group}>
+                  {(arcaParameters.data ?? ARCA_VOUCHER_TYPES).filter((item: any) => item.group === group).map((item: any) => <option key={item.key} value={item.key} disabled={!item.testEnabled}>{item.code} — {item.label}{item.testEnabled ? "" : " · Requiere FCE"}</option>)}
+                </optgroup>
+              ))}
+            </Select>
+            {arcaParameters.source === "FALLBACK" && <p className="mt-1 text-xs text-amber-700">Parámetros de respaldo; ARCA no respondió en este momento.</p>}
           </div>
           <div>
             <Label>Documento receptor</Label>
             <Select
-              value={testInvoice.clienteDocTipo}
-              onChange={(e) =>
-                setTestInvoice({
-                  ...testInvoice,
-                  clienteDocTipo: e.target.value,
-                })
-              }
+              value={String(testInvoice.clienteDocCode)}
+              onChange={(e) => { const doc = (arcaParameters.documents ?? ARCA_DOCUMENT_TYPES).find((item: any) => String(item.code) === e.target.value); setTestInvoice({ ...testInvoice, clienteDocTipo: doc?.label ?? e.target.value, clienteDocCode: Number(e.target.value) }); }}
             >
-              <option value="CUIT">CUIT</option>
-              <option value="DNI">DNI</option>
-              <option value="CONSUMIDOR_FINAL">Consumidor final</option>
+              {(arcaParameters.documents ?? ARCA_DOCUMENT_TYPES).map((item: any) => <option key={item.code} value={item.code}>{item.code} — {item.label}</option>)}
             </Select>
           </div>
           <div>
@@ -576,6 +601,12 @@ function ArcaPanel({
             />
           </div>
           <div>
+            <Label>Alícuota IVA</Label>
+            <Select value={String(testInvoice.ivaId ?? 5)} onChange={(e) => setTestInvoice({ ...testInvoice, ivaId: Number(e.target.value) })}>
+              {(arcaParameters.ivaTypes ?? ARCA_IVA_TYPES).map((item: any) => <option key={item.code} value={item.code}>{item.code} — {item.label}</option>)}
+            </Select>
+          </div>
+          <div>
             <Label>Tributos</Label>
             <Input
               type="number"
@@ -588,6 +619,14 @@ function ArcaPanel({
               }
             />
           </div>
+          {requiresAssociatedVoucher(testInvoice.voucherType as any) && <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+            <p className="mb-3 text-sm font-medium">Comprobante asociado obligatorio</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Select value={testInvoice.associatedVoucherType} onChange={(e) => setTestInvoice({ ...testInvoice, associatedVoucherType: e.target.value })}>{(arcaParameters.data ?? ARCA_VOUCHER_TYPES).filter((item: any) => item.testEnabled && item.operation === "FACTURA").map((item: any) => <option key={item.key} value={item.key}>{item.code} — {item.label}</option>)}</Select>
+              <Input type="number" placeholder="Punto de venta" value={testInvoice.associatedPuntoVenta} onChange={(e) => setTestInvoice({ ...testInvoice, associatedPuntoVenta: e.target.value })} />
+              <Input type="number" placeholder="Número" value={testInvoice.associatedNumero} onChange={(e) => setTestInvoice({ ...testInvoice, associatedNumero: e.target.value })} />
+            </div>
+          </div>}
           <div>
             <Label>Fecha</Label>
             <Input

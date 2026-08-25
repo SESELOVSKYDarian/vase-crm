@@ -6,6 +6,7 @@ import type {
   ArcaEnvironment,
   ArcaVoucherType,
 } from "../types";
+import { requiresAssociatedVoucher } from "../vouchers";
 
 /**
  * Implementación de referencia / demo de ArcaInvoiceProvider.
@@ -105,6 +106,9 @@ export class MockArcaProvider implements ArcaInvoiceProvider {
     }
     if (request.voucherType === "FACTURA_A" && request.clienteDocTipo !== "CUIT") {
       errors.push({ codigo: "10108", mensaje: "Factura A requiere CUIT del receptor" });
+    }
+    if (requiresAssociatedVoucher(request.voucherType) && !request.associatedVoucher) {
+      errors.push({ codigo: "10040", mensaje: "La nota requiere un comprobante asociado" });
     }
     return errors;
   }

@@ -12,10 +12,12 @@ import {
 import { decryptSecret } from "@/lib/security/encryption";
 import { writeAudit } from "@/lib/audit";
 import { assertSameOrigin } from "@/lib/security/csrf";
+import { ARCA_VOUCHER_TYPES } from "@/modules/arca/vouchers";
+import type { ArcaVoucherType } from "@/modules/arca/types";
 
 const requestSchema = z.object({
   puntoVenta: z.coerce.number().int().positive().optional(),
-  voucherType: z.enum(["FACTURA_A", "FACTURA_B", "FACTURA_C"]).optional(),
+  voucherType: z.enum(ARCA_VOUCHER_TYPES.map((item) => item.key) as [string, ...string[]]).optional(),
 });
 export async function POST(
   request: Request,
@@ -78,7 +80,7 @@ export async function POST(
         };
       } else if (action === "last-voucher" || action === "wsfe") {
         const point = input.data.puntoVenta ?? persisted.arcaPuntoVenta!,
-          type = input.data.voucherType ?? "FACTURA_A";
+          type = (input.data.voucherType ?? "FACTURA_A") as ArcaVoucherType;
         const last = await provider.getLastAuthorizedVoucher(point, type);
         data =
           action === "last-voucher"
@@ -88,7 +90,7 @@ export async function POST(
         const ticket = await provider.testAuthentication();
         const last = await provider.getLastAuthorizedVoucher(
           persisted.arcaPuntoVenta!,
-          "FACTURA_A",
+          (input.data.voucherType ?? "FACTURA_A") as ArcaVoucherType,
         );
         data = {
           checks: [
