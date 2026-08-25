@@ -18,7 +18,7 @@ const schema = z.object({
   cuit: z.string().trim().optional(),
   puntoVentaDefault: z.coerce.number().int().positive().optional(),
   arcaEnvironment: z.enum(["HOMOLOGACION", "PRODUCCION"]).optional(),
-  arcaCuit: z.string().trim().optional(),
+  arcaCuit: z.string().trim().nullable().optional().transform((value) => value || undefined),
   arcaPuntoVenta: z.coerce.number().int().positive().nullable().optional(),
   arcaCertificate: z.string().max(200000).optional(),
   arcaPrivateKey: z.string().max(200000).optional(),
@@ -68,11 +68,18 @@ export async function PUT(request: Request) {
     assertSameOrigin(request);
     user = await requirePermission("company.settings.manage");
     const parsed = schema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success)
+    if (!parsed.success) {
+      const fields = parsed.error.flatten().fieldErrors;
+      // Sólo se registran los nombres de los campos; nunca certificados ni claves.
+      console.error("Invalid company settings payload fields:", Object.keys(fields));
       return NextResponse.json(
-        { error: "Datos de configuración inválidos." },
+        {
+          error: "Datos de configuración inválidos.",
+          fields: process.env.NODE_ENV !== "production" ? fields : undefined,
+        },
         { status: 400 },
       );
+    }
     const body = parsed.data;
     if (
       body.arcaEnvironment === "PRODUCCION" &&

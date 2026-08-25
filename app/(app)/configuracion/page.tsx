@@ -19,9 +19,10 @@ import {
   XCircle,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
+import { buildSettingsPayload, formatSettingsFieldErrors, type CompanySettingsForm } from "@/lib/company-settings";
 import { ARCA_DOCUMENT_TYPES, ARCA_IVA_TYPES, ARCA_VOUCHER_TYPES, requiresAssociatedVoucher } from "@/modules/arca/vouchers";
 
-type Settings = Record<string, any>;
+type Settings = CompanySettingsForm & Record<string, any>;
 function readPem(file: File, set: (value: string) => void) {
   const reader = new FileReader();
   reader.onload = () => set(String(reader.result ?? ""));
@@ -752,7 +753,7 @@ export default function ConfiguracionPage() {
     const response = await fetch("/api/company-settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, ...overrides }),
+      body: JSON.stringify(buildSettingsPayload(form, overrides)),
     });
     const payload = await response.json().catch(() => null);
     if (response.ok) {
@@ -765,7 +766,7 @@ export default function ConfiguracionPage() {
         deleteArcaPrivateKey: false,
       }));
       setStatus("Configuración guardada correctamente.");
-    } else setStatus(payload?.error ?? "No se pudo guardar.");
+    } else setStatus([payload?.error ?? "No se pudo guardar.", formatSettingsFieldErrors(payload?.fields)].filter(Boolean).join(" "));
   }
   function chooseLogo(file: File | null) {
     if (!file) return;
