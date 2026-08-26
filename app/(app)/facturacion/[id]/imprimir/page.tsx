@@ -8,7 +8,8 @@ import { formatARS, formatDate } from "@/lib/format";
 export default function ImprimirFactura() {
   const params = useParams<{ id: string }>(),
     [invoice, setInvoice] = useState<any>(null),
-    [settings, setSettings] = useState<any>(null);
+    [settings, setSettings] = useState<any>(null),
+    [format, setFormat] = useState<"A4" | "TICKET">("A4");
   useEffect(() => {
     if (!params.id) return;
     Promise.all([
@@ -21,6 +22,11 @@ export default function ImprimirFactura() {
   }, [params.id]);
   if (!invoice) return <p className="p-8">Cargando factura…</p>;
   const fiscal = invoice.tipoFacturacion === "A";
+  const displayNumber = (document: any) =>
+    document.arcaNumero
+      ? `${String(document.puntoVenta).padStart(5, "0")}-${String(document.arcaNumero).padStart(8, "0")}`
+      : document.numero;
+  const documentLabel = invoice.documentType === "NOTA_CREDITO" ? `NOTA DE CRÉDITO ${invoice.tipoFacturacion}` : invoice.documentType === "NOTA_DEBITO" ? `NOTA DE DÉBITO ${invoice.tipoFacturacion}` : `FACTURA ${invoice.tipoFacturacion}`;
   return (
     <main className="print-page mx-auto max-w-4xl space-y-5 p-6">
       <div className="print-toolbar flex justify-between print:hidden">
@@ -28,6 +34,8 @@ export default function ImprimirFactura() {
           <ArrowLeft className="h-4 w-4" /> Volver
         </Button>
         <div className="flex gap-2">
+          <Button variant={format === "A4" ? "default" : "outline"} onClick={() => setFormat("A4")}>A4</Button>
+          <Button variant={format === "TICKET" ? "default" : "outline"} onClick={() => setFormat("TICKET")}>Ticket 80 mm</Button>
           <Button onClick={() => print()}>
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
@@ -36,7 +44,7 @@ export default function ImprimirFactura() {
           </Button>
         </div>
       </div>
-      <Card className="print-document print:border-0 print:shadow-none">
+      <Card className={`print-document ${format === "TICKET" ? "ticket-document" : ""} print:border-0 print:shadow-none`}>
         <div className="flex items-start justify-between border-b p-6">
           {settings?.logoData ? (
             <img
@@ -50,15 +58,15 @@ export default function ImprimirFactura() {
                 {settings?.razonSocial || "Vase CRM"}
               </p>
               <p className="text-xs">
-                {fiscal ? "Factura fiscal" : "Comprobante interno"}
+              {fiscal ? "Comprobante fiscal" : "Comprobante interno"}
               </p>
             </div>
           )}
           <div className="text-right">
             <h1 className="text-2xl font-bold">
-              {fiscal ? "FACTURA A" : "FACTURA N"}
+              {documentLabel}
             </h1>
-            <p className="font-semibold">{invoice.numero}</p>
+            <p className="font-semibold">{displayNumber(invoice)}</p>
             <p>{formatDate(invoice.fecha)}</p>
           </div>
         </div>
@@ -83,6 +91,7 @@ export default function ImprimirFactura() {
             )}
           </div>
         </div>
+        {invoice.originalInvoice && <div className="border-b p-6 text-sm"><p className="font-semibold">COMPROBANTE ASOCIADO</p><p className="mt-1">{invoice.originalInvoice.arcaVoucherType?.replaceAll("_", " ") || "Factura"} · PV {String(invoice.originalInvoice.puntoVenta).padStart(5, "0")} · N° {invoice.originalInvoice.numero}</p><p className="text-muted-foreground">Fecha {formatDate(invoice.originalInvoice.fecha)}</p></div>}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left">

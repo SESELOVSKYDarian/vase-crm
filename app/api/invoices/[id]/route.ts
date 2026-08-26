@@ -11,7 +11,8 @@ function allowed(user: any, key: string) { return hasPermission(user, key); }
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
-  const invoice = await prisma.invoice.findUnique({ where: { id: (await params).id }, include: { client: true, workOrder: true, items: true } });
+  if (!hasPermission(user, "invoices.view") && !hasPermission(user, "credit_notes.view") && !hasPermission(user, "debit_notes.view")) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  const invoice = await prisma.invoice.findUnique({ where: { id: (await params).id }, include: { client: true, workOrder: true, items: true, originalInvoice: { select: { id: true, numero: true, arcaNumero: true, arcaVoucherType: true, puntoVenta: true, fecha: true, total: true } }, adjustments: { include: { items: true }, orderBy: { createdAt: "desc" } } } });
   if (!invoice) return NextResponse.json({ error: "Factura inexistente" }, { status: 404 });
   return NextResponse.json({ data: invoice });
 }
@@ -23,6 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const id = (await params).id;
   const previous = await prisma.invoice.findUnique({ where: { id } });
   if (!previous) return NextResponse.json({ error: "Factura inexistente" }, { status: 404 });
+  if (previous.documentStatus === "EMITIDO" && (previous.tipoFacturacion === "N" || previous.estadoArca === "AUTORIZADA")) return NextResponse.json({ error: "Un comprobante emitido no puede editarse." }, { status: 409 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   const invoice = await prisma.invoice.update({ where: { id }, data: parsed.data });
@@ -37,6 +39,9 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   const id = (await params).id;
   const invoice = await prisma.invoice.findUnique({ where: { id }, include: { allocations: true, items: true } });
   if (!invoice) return NextResponse.json({ error: "Factura inexistente" }, { status: 404 });
+  if (invoice.documentStatus === "EMITIDO" && (invoice.tipoFacturacion === "N" || invoice.estadoArca === "AUTORIZADA")) {
+    return NextResponse.json({ error: "Un comprobante emitido no se elimina. Emití una nota de crédito o débito para rectificarlo." }, { status: 409 });
+  }
   if (invoice.allocations.length) return NextResponse.json({ error: "No se puede borrar una factura con cobros imputados" }, { status: 409 });
   const snapshot = { record: { id: invoice.id, numero: invoice.numero, tipoFacturacion: invoice.tipoFacturacion, arcaVoucherType: invoice.arcaVoucherType, clientId: invoice.clientId, workOrderId: invoice.workOrderId, fecha: invoice.fecha, cuit: invoice.cuit, condicionIva: invoice.condicionIva, puntoVenta: invoice.puntoVenta, moneda: invoice.moneda, subtotal: invoice.subtotal, iva: invoice.iva, tributos: invoice.tributos, total: invoice.total, cae: invoice.cae, vencimientoCae: invoice.vencimientoCae, estadoArca: invoice.estadoArca, estadoPago: invoice.estadoPago }, items: invoice.items.map((item) => ({ descripcion: item.descripcion, cantidad: item.cantidad, precioUnitario: item.precioUnitario, subtotal: item.subtotal })) };
   await prisma.$transaction(async (tx) => {

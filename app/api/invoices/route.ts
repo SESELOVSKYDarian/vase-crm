@@ -178,6 +178,7 @@ export async function POST(request: Request) {
             data: {
               estadoArca: result.estado,
               cae: result.cae,
+              arcaNumero: result.numeroComprobante ?? null,
               vencimientoCae: result.vencimientoCae
                 ? new Date(`${result.vencimientoCae}T00:00:00-03:00`)
                 : null,

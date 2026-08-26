@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatARS, formatDate } from "@/lib/format";
-import { Receipt, Wallet, Search, Pencil, Trash2, History, Printer } from "lucide-react";
+import { Receipt, Wallet, Search, Pencil, Trash2, History, Printer, MinusCircle, PlusCircle } from "lucide-react";
 export default function FacturacionPage() {
   const [invoices, setInvoices] = useState<any[]>([]),
     [notes, setNotes] = useState<any[]>([]),
@@ -17,7 +17,13 @@ export default function FacturacionPage() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [edit, setEdit] = useState<any>(null),
-    [remove, setRemove] = useState<any>(null);
+    [remove, setRemove] = useState<any>(null),
+    [filter, setFilter] = useState("TODOS"),
+    [adjustment, setAdjustment] = useState<any>(null),
+    [adjustmentReason, setAdjustmentReason] = useState("DEVOLUCION"),
+    [adjustmentDescription, setAdjustmentDescription] = useState(""),
+    [adjustmentMode, setAdjustmentMode] = useState("BORRADOR"),
+    [adjustmentItems, setAdjustmentItems] = useState<any[]>([]);
   const load = () =>
     Promise.all([
       fetch("/api/invoices").then((r) => r.json()),
@@ -94,6 +100,10 @@ export default function FacturacionPage() {
     }
     setBusy(false);
   }
+  function openAdjustment(invoice: any, kind: "NOTA_CREDITO" | "NOTA_DEBITO") { setError(""); setAdjustment({ invoice, kind }); setAdjustmentReason(kind === "NOTA_CREDITO" ? "DEVOLUCION" : "DIFERENCIA_PRECIO"); setAdjustmentDescription(""); setAdjustmentMode("BORRADOR"); setAdjustmentItems(invoice.items.map((item: any) => ({ originalItemId: item.id, descripcion: item.descripcion, quantity: item.cantidad, price: Number(item.precioUnitario) }))); }
+  async function createAdjustment(mode: "BORRADOR" | "EMITIR") { if (!adjustment) return; setBusy(true); setError(""); const response = await fetch(`/api/invoices/${adjustment.invoice.id}/adjustments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: adjustment.kind, mode, reason: adjustmentReason, reasonDescription: adjustmentDescription || undefined, items: adjustmentItems.filter((item) => Number(item.quantity) > 0) }) }); const body = await response.json().catch(() => null); setBusy(false); if (!response.ok) return setError(body?.error ?? "No se pudo crear el comprobante."); setAdjustment(null); load(); if (mode === "EMITIR") window.location.href = `/facturacion/${body.data.id}/imprimir`; }
+  async function emitDraft(invoice: any) { setBusy(true); setError(""); const response = await fetch(`/api/invoices/${invoice.id}/emit`, { method: "POST" }); const body = await response.json().catch(() => null); setBusy(false); if (!response.ok) return setError(body?.error ?? "No se pudo emitir el borrador."); load(); window.location.href = `/facturacion/${body.data.id}/imprimir`; }
+  const visibleInvoices = invoices.filter((invoice) => filter === "TODOS" || invoice.documentType === filter);
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -121,14 +131,15 @@ export default function FacturacionPage() {
         </div>
       </div>
       <div className="space-y-3">
-        {invoices.map((i) => (
+        <div className="flex flex-wrap gap-2"><Button size="sm" variant={filter === "TODOS" ? "default" : "outline"} onClick={() => setFilter("TODOS")}>Todos</Button><Button size="sm" variant={filter === "FACTURA" ? "default" : "outline"} onClick={() => setFilter("FACTURA")}>Facturas</Button><Button size="sm" variant={filter === "NOTA_CREDITO" ? "default" : "outline"} onClick={() => setFilter("NOTA_CREDITO")}>Notas de crédito</Button><Button size="sm" variant={filter === "NOTA_DEBITO" ? "default" : "outline"} onClick={() => setFilter("NOTA_DEBITO")}>Notas de débito</Button></div>
+        {visibleInvoices.map((i) => (
           <Card
             key={i.id}
             className="flex flex-wrap items-center justify-between gap-4 p-5"
           >
             <div>
               <p className="font-semibold">
-                {i.numero} · {i.tipoFacturacion}
+                {i.documentType === "NOTA_CREDITO" ? "Nota de crédito" : i.documentType === "NOTA_DEBITO" ? "Nota de débito" : "Factura"} {i.tipoFacturacion} · {i.numero}
               </p>
               <p className="text-sm text-muted-foreground">
                 {i.client?.razonSocial} · OT {i.workOrder?.numero} ·{" "}
@@ -136,10 +147,12 @@ export default function FacturacionPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <b>{formatARS(Number(i.total))}</b>
+              <b className={i.documentType === "NOTA_CREDITO" ? "text-destructive" : i.documentType === "NOTA_DEBITO" ? "text-vase-green" : ""}>{i.documentType === "NOTA_CREDITO" ? "-" : i.documentType === "NOTA_DEBITO" ? "+" : ""}{formatARS(Number(i.total))}</b>
               <Button size="sm" variant="outline" onClick={() => (window.location.href = `/facturacion/${i.id}/imprimir`)}>
                 <Printer className="h-4 w-4" /> Imprimir / PDF
               </Button>
+              {i.documentType !== "FACTURA" && i.documentStatus === "BORRADOR" && <Button size="sm" disabled={busy} onClick={() => emitDraft(i)}>Emitir borrador</Button>}
+              {i.documentType === "FACTURA" && <><Button size="sm" variant="outline" onClick={() => openAdjustment(i, "NOTA_CREDITO")}><MinusCircle className="h-4 w-4" /> Nota de crédito</Button><Button size="sm" variant="outline" onClick={() => openAdjustment(i, "NOTA_DEBITO")}><PlusCircle className="h-4 w-4" /> Nota de débito</Button></>}
               <Button
                 size="sm"
                 variant="outline"
@@ -274,6 +287,7 @@ export default function FacturacionPage() {
           </>
         }
       />
+      <Modal open={!!adjustment} onClose={() => setAdjustment(null)} title={adjustment?.kind === "NOTA_CREDITO" ? "Generar nota de crédito" : "Generar nota de débito"} description="La factura original queda intacta; el nuevo comprobante quedará vinculado." size="lg" footer={<><Button variant="outline" onClick={() => setAdjustment(null)}>Cancelar</Button><Button variant="outline" disabled={busy} onClick={() => createAdjustment("BORRADOR")}>Guardar borrador</Button><Button disabled={busy} onClick={() => createAdjustment("EMITIR")}>{busy ? "Emitiendo…" : "Confirmar emisión"}</Button></>}><div className="space-y-4"><div className="rounded-xl border bg-secondary/35 p-3 text-sm"><p className="font-semibold">Factura asociada · {adjustment?.invoice?.numero}</p><p>{adjustment?.invoice?.client?.razonSocial} · PV {adjustment?.invoice?.puntoVenta} · {formatARS(Number(adjustment?.invoice?.total ?? 0))}</p></div><div><Label>Motivo</Label><Select value={adjustmentReason} onChange={(e) => setAdjustmentReason(e.target.value)}>{(adjustment?.kind === "NOTA_CREDITO" ? [["DEVOLUCION", "Devolución"], ["ERROR_FACTURACION", "Error de facturación"], ["BONIFICACION", "Bonificación"], ["DESCUENTO_POSTERIOR", "Descuento posterior"], ["CANCELACION_TOTAL", "Cancelación total"], ["CANCELACION_PARCIAL", "Cancelación parcial"], ["OTRO", "Otro"]] : [["DIFERENCIA_PRECIO", "Diferencia de precio"], ["INTERESES", "Intereses"], ["GASTOS_ADICIONALES", "Gastos adicionales"], ["ERROR_FACTURACION", "Error de facturación"], ["AJUSTE", "Ajuste"], ["OTRO", "Otro"]]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></div>{adjustmentReason === "OTRO" && <div><Label>Descripción</Label><Input value={adjustmentDescription} onChange={(e) => setAdjustmentDescription(e.target.value)} /></div>}<div><Label>Ítems y cantidades</Label><div className="mt-2 space-y-2">{adjustmentItems.map((item, index) => <div key={item.originalItemId ?? index} className="grid grid-cols-[1fr_88px_110px] items-center gap-2 rounded-xl border p-3 text-sm"><span className="min-w-0 truncate">{item.descripcion}</span><Input type="number" min="0" value={item.quantity} onChange={(e) => setAdjustmentItems(adjustmentItems.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: Number(e.target.value) } : row))} /><span className="text-right tabular-nums">{formatARS(Number(item.quantity) * Number(item.price))}</span></div>)}</div></div>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}</div></Modal>
     </div>
   );
 }

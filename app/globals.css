@@ -126,4 +126,8 @@ html.theme-transition *::after {
   .print-document img { max-height: 26mm; }
   .print-document table { border-collapse: collapse; }
   .print-document .border-b, .print-document .border-t { border-color: #222 !important; }
+  .ticket-document { width: 80mm !important; max-width: 80mm !important; font-size: 10pt !important; }
+  .ticket-document .print-toolbar { display: none !important; }
+  .ticket-document table { font-size: 8.5pt !important; }
+  .ticket-document th, .ticket-document td { padding: 2mm 1mm !important; }
 }

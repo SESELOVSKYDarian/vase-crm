@@ -581,8 +581,15 @@ enum ArcaVoucherType {
   FACTURA_A
   FACTURA_B
   FACTURA_C
+  FACTURA_M
+  NOTA_DEBITO_A
+  NOTA_DEBITO_B
+  NOTA_DEBITO_C
+  NOTA_DEBITO_M
   NOTA_CREDITO_A
   NOTA_CREDITO_B
+  NOTA_CREDITO_C
+  NOTA_CREDITO_M
 }
 
 enum ArcaStatus {
@@ -599,11 +606,32 @@ enum InvoicePaymentStatus {
   PAGADA
 }
 
+enum FiscalDocumentType {
+  FACTURA
+  NOTA_CREDITO
+  NOTA_DEBITO
+}
+
+enum FiscalDocumentStatus {
+  BORRADOR
+  EMITIDO
+}
+
 model Invoice {
   id               String          @id @default(cuid())
   numero           String          @unique
   tipoFacturacion  TipoFacturacion
+  documentType     FiscalDocumentType @default(FACTURA)
+  documentStatus   FiscalDocumentStatus @default(EMITIDO)
   arcaVoucherType  ArcaVoucherType?
+  // Número devuelto por ARCA. Se mantiene separado de `numero` para evitar
+  // colisiones entre tipos de comprobante que comparten punto de venta y número.
+  arcaNumero       Int?
+  originalInvoiceId String?
+  originalInvoice  Invoice? @relation("InvoiceAdjustments", fields: [originalInvoiceId], references: [id])
+  adjustments      Invoice[] @relation("InvoiceAdjustments")
+  motivo           String?
+  motivoDescripcion String?
   clientId         String
   client           Client          @relation(fields: [clientId], references: [id])
   workOrderId      String
@@ -633,6 +661,9 @@ model Invoice {
   @@index([workOrderId])
   @@index([tipoFacturacion])
   @@index([estadoArca])
+  @@index([arcaVoucherType, arcaNumero])
+  @@index([originalInvoiceId])
+  @@index([documentType, documentStatus])
 }
 
 model InvoiceItem {
@@ -643,8 +674,10 @@ model InvoiceItem {
   cantidad       Int
   precioUnitario Decimal @db.Decimal(14, 2)
   subtotal       Decimal @db.Decimal(14, 2)
+  originalInvoiceItemId String?
 
   @@index([invoiceId])
+  @@index([originalInvoiceItemId])
 }
 
 // Log técnico e idempotente de cada intento de autorización ante ARCA.
@@ -739,6 +772,8 @@ model PaymentAllocation {
 enum AccountMovementType {
   PRESUPUESTO
   FACTURA
+  NOTA_CREDITO
+  NOTA_DEBITO
   PAGO
   RETENCION
   AJUSTE
