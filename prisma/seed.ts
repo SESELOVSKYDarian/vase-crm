@@ -44,8 +44,8 @@ async function main() {
   const passwordHash = `${salt}:${scryptSync("Admin1234!", salt, 64).toString("hex")}`;
   const admin = await prisma.user.upsert({
     where: { email: "admin@vasecrm.com" },
-    update: { active: true, role: "ADMIN" },
-    create: { name: "Administrador Vase CRM", email: "admin@vasecrm.com", passwordHash, role: "ADMIN", active: true },
+    update: { active: true, role: "ADMIN", isSuperAdmin: true },
+    create: { name: "Administrador Vase CRM", email: "admin@vasecrm.com", passwordHash, role: "ADMIN", active: true, isSuperAdmin: true },
   });
   await prisma.userRole.upsert({ where: { userId_roleId: { userId: admin.id, roleId: roles.get("ADMIN")! } }, update: {}, create: { userId: admin.id, roleId: roles.get("ADMIN")! } });
   console.log("Administrador creado: admin@vasecrm.com");

@@ -32,6 +32,7 @@ model User {
   passwordHash  String
   role          Role
   active        Boolean  @default(true)
+  isSuperAdmin  Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
