@@ -1,40 +1,132 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BarChart3, TrendingUp } from "lucide-react";
 import { formatARS, formatM2 } from "@/lib/format";
 import { chartNumber } from "@/lib/analytics-series";
 
 type SeriesRow = { label: string; presupuestado: number; facturado: number; cobrado: number };
 type BarRow = { label: string; value: number; color?: string };
-const palette = ["#16a34a", "#0f766e", "#2563eb", "#ca8a04", "#7c3aed", "#db2777"];
-const finite = chartNumber;
+type ValueFormat = "number" | "money" | "m2";
 
-export function RevenueChart({ data }: { data: SeriesRow[] }) {
-  const [selected, setSelected] = useState<number | null>(null);
-  const rows = useMemo(() => data.map((row) => ({ label: String(row.label), presupuestado: finite(row.presupuestado), facturado: finite(row.facturado), cobrado: finite(row.cobrado) })), [data]);
-  const max = Math.max(1, ...rows.flatMap((row) => [row.presupuestado, row.facturado, row.cobrado]));
-  const x = (index: number) => rows.length < 2 ? 50 : 8 + index * 84 / (rows.length - 1);
-  const y = (value: number) => 88 - (value / max) * 72;
-  const line = (key: keyof Omit<SeriesRow, "label">) => rows.map((row, index) => `${x(index)},${y(row[key])}`).join(" ");
-  if (!rows.length) return <EmptyChart />;
-  const current = selected === null ? null : rows[selected];
-  return <div className="relative h-full min-h-0" role="img" aria-label="Evolución mensual presupuestada, facturada y cobrada"><svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible"><g stroke="currentColor" className="text-border" strokeWidth=".35">{[16, 40, 64, 88].map((value) => <line key={value} x1="8" x2="94" y1={value} y2={value} vectorEffect="non-scaling-stroke" />)}</g>{([ ["presupuestado", "#16a34a"], ["facturado", "#0f766e"], ["cobrado", "#2563eb"] ] as const).map(([key, color]) => <polyline key={key} points={line(key)} fill="none" stroke={color} strokeWidth=".9" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />)}{rows.map((row, index) => <g key={row.label} onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} tabIndex={0} className="cursor-pointer outline-none"><rect x={x(index) - 4} y="8" width="8" height="80" fill="transparent" />{([ ["presupuestado", "#16a34a"], ["facturado", "#0f766e"], ["cobrado", "#2563eb"] ] as const).map(([key, color]) => <circle key={key} cx={x(index)} cy={y(row[key])} r={selected === index ? "1.55" : "1.05"} fill={color} />)}<text x={x(index)} y="98" textAnchor="middle" className="fill-muted-foreground text-[3px]">{row.label}</text></g>)}</svg><Legend /><TooltipCard label={current?.label} rows={current ? [{ label: "Presupuestado", value: formatARS(current.presupuestado), color: "#16a34a" }, { label: "Facturado", value: formatARS(current.facturado), color: "#0f766e" }, { label: "Cobrado", value: formatARS(current.cobrado), color: "#2563eb" }] : []} /></div>;
+const COLORS = ["#16a34a", "#0f766e", "#2563eb", "#d97706", "#7c3aed", "#db2777"];
+const SERIES = [
+  { key: "presupuestado", label: "Presupuestado", color: "#16a34a" },
+  { key: "facturado", label: "Facturado", color: "#0f766e" },
+  { key: "cobrado", label: "Cobrado", color: "#2563eb" },
+] as const;
+const axis = { fontSize: 12, fill: "currentColor", className: "text-muted-foreground" };
+
+function useChartAnimation() {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => setEnabled(!window.matchMedia("(prefers-reduced-motion: reduce)").matches), []);
+  return enabled;
 }
 
-export function VerticalBarChart({ data, format = "number" }: { data: BarRow[]; format?: "number" | "money" | "m2" }) {
-  const [selected, setSelected] = useState<number | null>(null); const rows = useMemo(() => data.map((row) => ({ ...row, value: finite(row.value) })), [data]); const max = Math.max(1, ...rows.map((row) => row.value));
-  if (!rows.length) return <EmptyChart />;
-  const width = Math.max(12, 76 / rows.length); const value = (number: number) => format === "money" ? formatARS(number) : format === "m2" ? formatM2(number) : String(number);
-  const current = selected === null ? null : rows[selected];
-  return <div className="relative h-full min-h-0" role="img" aria-label="Gráfico de barras"><svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible"><g stroke="currentColor" className="text-border" strokeWidth=".35">{[16, 40, 64, 88].map((y) => <line key={y} x1="8" x2="94" y1={y} y2={y} vectorEffect="non-scaling-stroke" />)}</g>{rows.map((row, index) => { const height = Math.max(1, row.value / max * 72); const x = 10 + index * (80 / rows.length) + (80 / rows.length - width) / 2; return <g key={row.label} onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} tabIndex={0} className="cursor-pointer outline-none"><rect x={x} y={88 - height} width={width} height={height} rx="1.8" fill={row.color ?? palette[index % palette.length]} opacity={selected === null || selected === index ? 1 : .55} /><text x={x + width / 2} y="98" textAnchor="middle" className="fill-muted-foreground text-[3px]">{row.label}</text></g>; })}</svg><TooltipCard label={current?.label} rows={current ? [{ label: "Valor", value: value(current.value), color: current.color ?? palette[(selected ?? 0) % palette.length] }] : []} /></div>;
+function compact(value: number) {
+  return new Intl.NumberFormat("es-AR", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function formatValue(value: number, format: ValueFormat) {
+  if (format === "money") return formatARS(value);
+  if (format === "m2") return formatM2(value);
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value);
+}
+
+export function RevenueChart({ data }: { data: SeriesRow[] }) {
+  const animate = useChartAnimation();
+  const rows = useMemo(() => data.map((row) => ({ label: String(row.label), presupuestado: chartNumber(row.presupuestado), facturado: chartNumber(row.facturado), cobrado: chartNumber(row.cobrado) })), [data]);
+  const hasMovement = rows.some((row) => SERIES.some((serie) => row[serie.key] > 0));
+  if (!rows.length || !hasMovement) return <EmptyChart icon={TrendingUp} title="Sin movimientos en el período" description="Cuando haya presupuestos, facturas o cobros aparecerá su evolución mensual." />;
+
+  return (
+    <ChartFrame label="Evolución mensual presupuestada, facturada y cobrada" count={rows.length}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={rows} margin={{ top: 12, right: 16, left: 2, bottom: 4 }}>
+          <CartesianGrid vertical={false} stroke="currentColor" className="text-border/70" strokeDasharray="3 5" />
+          <XAxis dataKey="label" tick={axis} tickLine={false} axisLine={false} dy={8} />
+          <YAxis tick={axis} tickFormatter={compact} tickLine={false} axisLine={false} width={54} />
+          <Tooltip content={<RevenueTooltip />} cursor={{ stroke: "currentColor", strokeOpacity: 0.12 }} />
+          <Legend content={<ChartLegend />} verticalAlign="top" align="right" height={38} />
+          {SERIES.map((serie) => <Line key={serie.key} type="monotone" dataKey={serie.key} name={serie.label} stroke={serie.color} strokeWidth={2.5} dot={{ r: 3, fill: serie.color, strokeWidth: 2, stroke: "var(--background)" }} activeDot={{ r: 5, strokeWidth: 3, stroke: "var(--background)" }} isAnimationActive={animate} animationDuration={260} animationEasing="ease-out" />)}
+        </LineChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
+}
+
+export function VerticalBarChart({ data, format = "number" }: { data: BarRow[]; format?: ValueFormat }) {
+  const animate = useChartAnimation();
+  const rows = useMemo(() => data.map((row, index) => ({ ...row, value: chartNumber(row.value), color: row.color ?? COLORS[index % COLORS.length] })), [data]);
+  if (!rows.length || rows.every((row) => row.value === 0)) return <EmptyChart />;
+  return (
+    <ChartFrame label="Gráfico de barras vertical" count={rows.length}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={rows} margin={{ top: 24, right: 12, left: 0, bottom: 6 }} barCategoryGap="28%">
+          <CartesianGrid vertical={false} stroke="currentColor" className="text-border/70" strokeDasharray="3 5" />
+          <XAxis dataKey="label" tick={axis} tickLine={false} axisLine={false} dy={8} interval={0} />
+          <YAxis tick={axis} tickFormatter={(value) => format === "m2" ? `${compact(value)} m²` : compact(value)} tickLine={false} axisLine={false} width={62} allowDecimals={format !== "number"} />
+          <Tooltip content={<ValueTooltip format={format} />} cursor={{ fill: "currentColor", fillOpacity: 0.035 }} />
+          <Bar dataKey="value" name="Valor" radius={[8, 8, 3, 3]} maxBarSize={92} isAnimationActive={animate} animationDuration={240} animationEasing="ease-out">
+            {rows.map((row) => <Cell key={row.label} fill={row.color} />)}
+            <LabelList dataKey="value" position="top" formatter={(value: number) => format === "m2" ? formatM2(value) : compact(value)} className="fill-foreground text-[11px] font-semibold" />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
 }
 
 export function HorizontalBarChart({ data, format = "money" }: { data: BarRow[]; format?: "money" | "number" }) {
-  const [selected, setSelected] = useState<number | null>(null); const rows = useMemo(() => data.map((row) => ({ ...row, value: finite(row.value) })), [data]); const max = Math.max(1, ...rows.map((row) => row.value)); if (!rows.length) return <EmptyChart />;
-  const rowHeight = 76 / rows.length; const current = selected === null ? null : rows[selected];
-  return <div className="relative h-full min-h-0" role="img" aria-label="Gráfico horizontal"><svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">{rows.map((row, index) => { const y = 9 + index * rowHeight; const width = row.value / max * 58; return <g key={row.label} onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} tabIndex={0} className="cursor-pointer outline-none"><text x="1" y={y + rowHeight / 2 + 1.5} className="fill-muted-foreground text-[3px]">{row.label}</text><rect x="34" y={y} width={width} height={Math.min(12, rowHeight - 3)} rx="1.8" fill={row.color ?? palette[index % palette.length]} opacity={selected === null || selected === index ? 1 : .55} /></g>; })}</svg><TooltipCard label={current?.label} rows={current ? [{ label: "Cobrado", value: format === "money" ? formatARS(current.value) : String(current.value), color: current.color ?? palette[(selected ?? 0) % palette.length] }] : []} /></div>;
+  const animate = useChartAnimation();
+  const rows = useMemo(() => data.map((row, index) => ({ ...row, value: chartNumber(row.value), color: row.color ?? COLORS[index % COLORS.length] })), [data]);
+  if (!rows.length || rows.every((row) => row.value === 0)) return <EmptyChart />;
+  return (
+    <ChartFrame label="Cobros agrupados por medio de pago" count={rows.length}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart layout="vertical" data={rows} margin={{ top: 8, right: 48, left: 12, bottom: 8 }} barCategoryGap="30%">
+          <CartesianGrid horizontal={false} stroke="currentColor" className="text-border/70" strokeDasharray="3 5" />
+          <XAxis type="number" tick={axis} tickFormatter={compact} tickLine={false} axisLine={false} />
+          <YAxis type="category" dataKey="label" tick={axis} tickLine={false} axisLine={false} width={112} />
+          <Tooltip content={<ValueTooltip format={format} />} cursor={{ fill: "currentColor", fillOpacity: 0.035 }} />
+          <Bar dataKey="value" name="Cobrado" radius={[3, 8, 8, 3]} maxBarSize={38} isAnimationActive={animate} animationDuration={240} animationEasing="ease-out">
+            {rows.map((row) => <Cell key={row.label} fill={row.color} />)}
+            <LabelList dataKey="value" position="right" formatter={(value: number) => format === "money" ? compact(value) : value} className="fill-foreground text-[11px] font-semibold" />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
 }
 
-function Legend() { return <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[#16a34a]" />Presupuestado</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[#0f766e]" />Facturado</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[#2563eb]" />Cobrado</span></div>; }
-function TooltipCard({ label, rows }: { label?: string; rows: { label: string; value: string; color: string }[] }) { if (!label) return null; return <div className="pointer-events-none absolute right-2 top-2 rounded-lg border border-border bg-card/95 px-3 py-2 text-xs shadow-lg backdrop-blur"><p className="mb-1 font-semibold">{label}</p>{rows.map((row) => <p key={row.label} className="flex items-center justify-between gap-3 text-muted-foreground"><span><i className="mr-1 inline-block h-1.5 w-1.5 rounded-full" style={{ background: row.color }} />{row.label}</span><b className="text-foreground tabular-nums">{row.value}</b></p>)}</div>; }
-function EmptyChart() { return <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl bg-secondary/35 px-6 text-center text-sm text-muted-foreground">Todavía no hay datos suficientes para este gráfico.</div>; }
+function ChartFrame({ label, count, children }: { label: string; count: number; children: React.ReactNode }) {
+  return <div className="chart-enter h-full min-h-0 w-full" role="img" aria-label={label}>{children}<span className="sr-only">El gráfico contiene {count} registros.</span></div>;
+}
+
+function ChartLegend({ payload }: any) {
+  return <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-xs text-muted-foreground">{(payload ?? []).map((entry: any) => <span key={entry.value} className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />{entry.value}</span>)}</div>;
+}
+
+function RevenueTooltip({ active, label, payload }: any) {
+  if (!active || !payload?.length) return null;
+  return <TooltipSurface title={label}>{payload.map((entry: any) => <TooltipRow key={entry.dataKey} label={entry.name} value={formatARS(Number(entry.value))} color={entry.color} />)}</TooltipSurface>;
+}
+
+function ValueTooltip({ active, label, payload, format = "number" }: any) {
+  if (!active || !payload?.length) return null;
+  const entry = payload[0];
+  return <TooltipSurface title={label}><TooltipRow label={entry.name ?? "Valor"} value={formatValue(Number(entry.value), format)} color={entry.payload?.color ?? entry.color} /></TooltipSurface>;
+}
+
+function TooltipSurface({ title, children }: { title: string; children: React.ReactNode }) {
+  return <div className="min-w-44 rounded-xl border border-border/80 bg-card/95 px-3.5 py-3 text-xs shadow-[0_14px_32px_-18px_rgba(15,23,42,.45)] backdrop-blur-md"><p className="mb-2 font-semibold capitalize text-foreground">{title}</p><div className="space-y-1.5">{children}</div></div>;
+}
+
+function TooltipRow({ label, value, color }: { label: string; value: string; color: string }) {
+  return <div className="flex items-center justify-between gap-5 text-muted-foreground"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />{label}</span><strong className="font-semibold tabular-nums text-foreground">{value}</strong></div>;
+}
+
+function EmptyChart({ icon: Icon = BarChart3, title = "Sin datos para graficar", description = "Probá ampliando el período o cambiando los filtros." }: { icon?: typeof BarChart3; title?: string; description?: string }) {
+  return <div className="chart-enter flex h-full min-h-[220px] items-center justify-center px-6 text-center"><div className="max-w-xs"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-vase-green-soft text-vase-green"><Icon className="h-5 w-5" aria-hidden="true" /></span><p className="mt-3 text-sm font-semibold text-foreground">{title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p></div></div>;
+}
