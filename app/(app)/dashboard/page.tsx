@@ -14,7 +14,25 @@ type Data = { kpis: Record<string, number>; monthly: Array<{ label: string; pres
 export default function DashboardPage() {
   const [data, setData] = useState<Data | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [productionOnly, setProductionOnly] = useState<boolean | null>(null);
   useEffect(() => { let alive = true; fetch("/api/auth/me").then((response) => response.ok ? response.json() : null).then((payload) => { const permissions: string[] = payload?.user?.permissions ?? []; if (alive) setProductionOnly(permissions.includes("production.view_assigned") && !permissions.includes("production.view_all")); }); return () => { alive = false; }; }, []);
-  useEffect(() => { if (productionOnly) return; let alive = true; setLoading(true); fetch("/api/analytics").then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.error || "No se pudo cargar el dashboard."); return body.data; }).then((result) => alive && setData(result)).catch((reason) => alive && setError(reason.message)).finally(() => alive && setLoading(false)); return () => { alive = false; }; }, [productionOnly]);
+  useEffect(() => {
+    if (productionOnly !== false) return;
+    let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    setLoading(true);
+    setError("");
+    fetch("/api/analytics", { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(body?.error || "No se pudo cargar el dashboard.");
+        if (!body?.data) throw new Error("El servidor respondió sin datos para el dashboard.");
+        return body.data;
+      })
+      .then((result) => { if (active) setData(result); })
+      .catch((reason) => { if (active) setError(controller.signal.aborted ? "La consulta del dashboard tardó demasiado. Volvé a intentar." : reason instanceof Error ? reason.message : "No se pudo cargar el dashboard."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
+  }, [productionOnly]);
   if (productionOnly === null) return <div className="min-h-[45dvh]" aria-busy="true" />;
   if (productionOnly) return <ProductionDashboard />;
   const k = data?.kpis; const stats = [{ label: "Presupuestado", value: formatARS(k?.presupuestado ?? 0), icon: DollarSign, accent: true }, { label: "Facturado", value: formatARS(k?.facturado ?? 0), icon: Receipt }, { label: "Cobrado", value: formatARS(k?.cobrado ?? 0), icon: Wallet }, { label: "Pendiente de cobro", value: formatARS(k?.pendienteCobro ?? 0), icon: AlertTriangle }, { label: "OT activas", value: String(k?.otsActivas ?? 0), icon: Factory }, { label: "m² en producción", value: formatM2(k?.m2EnProduccion ?? 0), icon: Layers }];
