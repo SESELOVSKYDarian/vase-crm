@@ -18,6 +18,8 @@ import {
   Upload,
   UserPlus,
   XCircle,
+  Eye,
+  Trash2,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { buildSettingsPayload, formatSettingsFieldErrors, type CompanySettingsForm } from "@/lib/company-settings";
@@ -334,6 +336,7 @@ function ArcaPanel({
             )}
           </div>
         </Card>
+        <ArcaCredentialFiles />
         <Card className="p-5">
           <h2 className="font-semibold">Pruebas de conexión ARCA</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -421,6 +424,7 @@ function ArcaPanel({
         </Card>
       </div>
       <div className="space-y-5">
+        <ArcaHealthCard />
         <Card className="p-5">
           <h2 className="font-semibold">Estado de conexión</h2>
           <p className="mt-3 text-sm">
@@ -725,6 +729,21 @@ function TestButton({ label, action, running, onClick }: any) {
       {label}
     </Button>
   );
+}
+
+function ArcaCredentialFiles() {
+  const [files, setFiles] = useState<any[]>([]), [selected, setSelected] = useState<any>(null), [removing, setRemoving] = useState<any>(null), [confirmation, setConfirmation] = useState(""), [error, setError] = useState("");
+  const refresh = () => fetch("/api/arca/credentials").then((response) => response.ok ? response.json() : { data: [] }).then((payload) => setFiles(payload.data ?? []));
+  useEffect(() => { refresh(); }, []);
+  async function remove() { const response = await fetch(`/api/arca/credentials/${removing.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation }) }); const body = await response.json().catch(() => null); if (!response.ok) return setError(body?.error ?? "No se pudo eliminar."); setRemoving(null); setConfirmation(""); refresh(); }
+  return <Card className="p-5"><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold">Archivos y credenciales ARCA</h2><p className="mt-1 text-sm text-muted-foreground">Metadatos seguros del archivo original. El contenido y la clave privada nunca se muestran.</p></div><Badge>{files.filter((file) => file.active).length ? "Credencial activa" : "Sin archivo activo"}</Badge></div><div className="mt-4 space-y-2">{files.map((file) => <div key={file.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{file.originalFileName}</p><p className="mt-0.5 text-xs text-muted-foreground">{file.fileType} · {(file.fileSize / 1024).toFixed(1)} KB · {file.environment} · {file.active ? "Activo" : "Histórico"}</p></div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setSelected(file)}><Eye className="h-3.5 w-3.5" /> Detalles</Button><Button size="sm" variant="outline" onClick={() => { setError(""); setRemoving(file); }}><Trash2 className="h-3.5 w-3.5" /> Eliminar</Button></div></div>)}{!files.length && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Todavía no hay archivos PFX/P12 administrados.</p>}</div><Modal open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.originalFileName ?? "Credencial"} description="Información de seguridad del archivo; no se exponen secretos."><dl className="grid gap-3 text-sm sm:grid-cols-2">{[["Tipo", selected?.fileType], ["Ambiente", selected?.environment], ["Tamaño", selected ? `${(selected.fileSize / 1024).toFixed(1)} KB` : ""], ["Importado por", selected?.uploadedBy?.name], ["Titular", selected?.certificateSubject], ["Emisor", selected?.certificateIssuer], ["Serie", selected?.certificateSerial], ["Huella SHA-256", selected?.fingerprintSha256], ["Vigente desde", selected?.certificateValidFrom ? formatDate(selected.certificateValidFrom) : "—"], ["Vence", selected?.certificateValidTo ? formatDate(selected.certificateValidTo) : "—"]].map(([label, value]) => <div key={String(label)}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-all font-medium">{value || "—"}</dd></div>)}</dl></Modal><Modal open={Boolean(removing)} onClose={() => setRemoving(null)} title={`¿Eliminar ${removing?.originalFileName ?? "archivo"}?`} description={removing?.active ? "Esta es la credencial activa. La conexión con ARCA quedará sin configurar y se invalidarán los tickets de acceso." : "Se eliminará el archivo cifrado histórico; no se modifican facturas ni CAE."} footer={<><Button variant="outline" onClick={() => setRemoving(null)}>Cancelar</Button><Button disabled={removing?.active && confirmation !== "ELIMINAR"} onClick={remove}>Eliminar archivo</Button></>}>{removing?.active && <div><Label>Escribí ELIMINAR para confirmar</Label><Input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div>}{error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}</Modal></Card>;
+}
+
+function ArcaHealthCard() {
+  const [health, setHealth] = useState<any>(null);
+  useEffect(() => { fetch("/api/arca/health").then((response) => response.ok ? response.json() : null).then((payload) => setHealth(payload?.data ?? null)); }, []);
+  const bad = ["POSIBLE_CAIDA_ARCA", "CONFIGURACION_INVALIDA", "PROBLEMA_LOCAL"].includes(health?.status);
+  return <Card className="p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold">Monitor ARCA</h2><p className="mt-1 text-sm text-muted-foreground">Chequeos no invasivos de WSAA y WSFEv1.</p></div><Badge variant={bad ? "danger" : health?.status === "OPERATIVO" ? "success" : "warning"}>{health?.status?.replaceAll("_", " ") ?? "SIN CONFIGURAR"}</Badge></div><div className="mt-4 space-y-2 text-sm"><p>WSAA <span className="float-right font-medium">{health?.checks?.[0]?.wsaaStatus ?? "—"}</span></p><p>WSFEv1 <span className="float-right font-medium">{health?.checks?.[0]?.wsfeStatus ?? "—"}</span></p>{health?.checkedAt && <p className="pt-2 text-xs text-muted-foreground">Última verificación: {formatDate(health.checkedAt)}</p>}{health?.incident && <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">Posible indisponibilidad desde {formatDate(health.incident.startedAt)}. No se atribuye el origen de forma concluyente.</p>}</div></Card>;
 }
 
 function UserManagement({ users, roles, onRefresh }: { users: any[]; roles: any[]; onRefresh: () => void }) {

@@ -5,6 +5,7 @@ import { hasAnyPermission } from "@/lib/permissions";
 
 export async function GET() {
   const user = await getCurrentUser(); if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
+  if (!hasAnyPermission(user, ["production.view_all", "production.view_assigned"])) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const canViewAll = hasAnyPermission(user, ["production.view_all", "production.assign"]);
   const where = canViewAll ? undefined : { OR: [{ corteUsuarioId: user.id }, { armadoUsuarioId: user.id }, { produccionUsuarioId: user.id }] };
   try {

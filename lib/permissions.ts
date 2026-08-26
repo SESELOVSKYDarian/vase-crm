@@ -12,9 +12,12 @@ const legacyPermissions: Partial<Record<Role, string[]>> = {
 };
 
 export function hasPermission(user: UserWithPermissions, permission: string) {
-  if (user.role === "ADMIN") return true;
   const rolePermissions = user.userRoles.flatMap((entry) => entry.role.active ? entry.role.permissions.map((item) => item.permission.key) : []);
-  return rolePermissions.includes(permission) || rolePermissions.includes("*") || (legacyPermissions[user.role] ?? []).includes(permission);
+  // Configurable roles are authoritative. The enum only supports users from
+  // before the migration, who have no UserRole records at all.
+  if (user.userRoles.length > 0) return rolePermissions.includes(permission) || rolePermissions.includes("*");
+  const legacy = legacyPermissions[user.role] ?? [];
+  return legacy.includes(permission) || legacy.includes("*");
 }
 
 export function hasAnyPermission(user: UserWithPermissions, permissions: string[]) {

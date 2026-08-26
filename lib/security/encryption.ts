@@ -35,6 +35,8 @@ export function encryptSecret(value: string) {
   ]);
   return `${VERSION}:${iv.toString("base64")}:${cipher.getAuthTag().toString("base64")}:${ciphertext.toString("base64")}`;
 }
+export function encryptBinary(value: Buffer) { return encryptSecret(value.toString("base64")); }
+export function decryptBinary(value: string) { return Buffer.from(decryptSecret(value), "base64"); }
 
 export function decryptSecret(value: string) {
   const [version, iv64, tag64, ciphertext64] = value.split(":");

@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const itemSchema = z.object({ producto: z.string().optional(), composicion: z.string().optional(), cantidad: z.coerce.number().int().positive(), anchoMm: z.coerce.number().int().positive(), altoMm: z.coerce.number().int().positive(), precioM2: z.coerce.number().nonnegative().optional(), precioVentaUnitario: z.coerce.number().nonnegative().optional(), subtotalNeto: z.coerce.number().nonnegative().optional(), bonificacionPct: z.coerce.number().min(0).max(100).optional() });
 const schema = z.object({ tipo: z.enum(["SIMPLE", "DVH"]), clienteId: z.string().min(1), obra: z.string().trim().optional().default(""), fechaEntrega: z.string().min(1), estado: z.enum(["BORRADOR", "ENVIADO"]).default("BORRADOR"), totals: z.object({ cantidad: z.coerce.number().int().positive(), m2: z.coerce.number().nonnegative(), subtotalBruto: z.coerce.number().nonnegative(), bonificacion: z.coerce.number().nonnegative(), subtotalNeto: z.coerce.number().nonnegative(), iva: z.coerce.number().nonnegative(), total: z.coerce.number().positive() }), items: z.array(itemSchema).min(1) });
-function canCreate(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) { return user.role === "ADMIN" || user.role === "VENTAS" || user.userRoles.some((ur) => ur.role.active && ur.role.permissions.some((rp) => rp.permission.key === "quotes.create")); }
+function canCreate(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) { return hasPermission(user, "quotes.create"); }
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
+  if (!hasPermission(user, "quotes.view")) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const status = new URL(request.url).searchParams.get("status");
   try { const quotes = await prisma.quote.findMany({ where: status ? { estado: status as never } : { estado: { not: "ANULADO" } }, include: { client: true, workOrder: { select: { id: true, numero: true } } }, orderBy: { updatedAt: "desc" } }); return NextResponse.json({ data: quotes }); }
   catch { return NextResponse.json({ error: "No se pudieron cargar los presupuestos" }, { status: 500 }); }

@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
 
 const schema = z.object({ cuit: z.string().min(1).optional(), puntoVenta: z.coerce.number().int().positive().optional() });
-function allowed(user: any, key: string) { return user.role === "ADMIN" || user.userRoles.some((entry: any) => entry.role.active && entry.role.permissions.some((permission: any) => permission.permission.key === key)); }
+function allowed(user: any, key: string) { return hasPermission(user, key); }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();

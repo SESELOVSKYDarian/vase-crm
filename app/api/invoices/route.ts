@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
 import { getArcaProvider } from "@/modules/arca/server";
 import { assertSameOrigin } from "@/lib/security/csrf";
@@ -13,20 +14,13 @@ const schema = z.object({
 function canInvoice(
   u: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>,
 ) {
-  return (
-    u.role === "ADMIN" ||
-    u.role === "ADMINISTRACION" ||
-    u.userRoles.some(
-      (x) =>
-        x.role.active &&
-        x.role.permissions.some((p) => p.permission.key === "invoices.create"),
-    )
-  );
+  return hasPermission(u, "invoices.create");
 }
 export async function GET() {
   const u = await getCurrentUser();
   if (!u)
     return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
+  if (!hasPermission(u, "invoices.view")) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   try {
     const rows = await prisma.invoice.findMany({
       include: {

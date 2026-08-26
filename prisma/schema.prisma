@@ -37,6 +37,7 @@ model User {
 
   auditLogs     AuditLog[]
   arcaConnectionTests ArcaConnectionTest[]
+  arcaCredentialFiles ArcaCredentialFile[]
   quotesCreated Quote[]        @relation("QuoteCreatedBy")
   otsAssigned   WorkOrder[]    @relation("WorkOrderOperario")
   sessions      Session[]
@@ -384,10 +385,13 @@ model WorkOrder {
   operario   User?   @relation("WorkOrderOperario", fields: [operarioId], references: [id])
   corteUsuarioId String?
   corteUsuario User? @relation("WorkOrderCorte", fields: [corteUsuarioId], references: [id])
+  corteAsignadoAt DateTime?
   armadoUsuarioId String?
   armadoUsuario User? @relation("WorkOrderArmado", fields: [armadoUsuarioId], references: [id])
+  armadoAsignadoAt DateTime?
   produccionUsuarioId String?
   produccionUsuario User? @relation("WorkOrderProduccion", fields: [produccionUsuarioId], references: [id])
+  produccionAsignadoAt DateTime?
 
   items       WorkOrderItem[]
   cutOrder    CutOrder?
@@ -829,4 +833,54 @@ model ArcaConnectionTest {
 
   @@index([createdAt])
   @@index([environment, testType])
+}
+
+model ArcaCredentialFile {
+  id                    String   @id @default(cuid())
+  originalFileName      String
+  fileType              String
+  encryptedFileData     String   @db.LongText
+  fileSize              Int
+  environment           String
+  uploadedById          String
+  uploadedBy            User     @relation(fields: [uploadedById], references: [id])
+  uploadedAt            DateTime @default(now())
+  certificateSubject    String?
+  certificateIssuer     String?
+  certificateSerial     String?
+  certificateValidFrom  DateTime?
+  certificateValidTo    DateTime?
+  fingerprintSha256     String?
+  active                Boolean  @default(false)
+
+  @@index([environment, active])
+  @@index([uploadedById, uploadedAt])
+}
+
+model ArcaHealthCheck {
+  id               String   @id @default(cuid())
+  environment      String
+  status           String
+  wsaaStatus       String
+  wsfeStatus       String
+  durationMs       Int
+  errorCategory    String?
+  errorCode        String?
+  sanitizedMessage String?  @db.Text
+  checkedAt        DateTime @default(now())
+
+  @@index([environment, checkedAt])
+}
+
+model ArcaIncident {
+  id             String   @id @default(cuid())
+  environment    String
+  status         String   @default("OPEN")
+  service        String
+  startedAt      DateTime @default(now())
+  recoveredAt    DateTime?
+  failureCount   Int      @default(0)
+  lastMessage    String?  @db.Text
+
+  @@index([environment, status])
 }

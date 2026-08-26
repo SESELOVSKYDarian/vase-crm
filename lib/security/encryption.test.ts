@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { decryptSecret, encryptSecret } from "./encryption";
+import { decryptBinary, decryptSecret, encryptBinary, encryptSecret } from "./encryption";
 
 const original = process.env.ARCA_CREDENTIALS_MASTER_KEY;
 afterEach(() => {
@@ -32,5 +32,12 @@ describe("ARCA credential encryption", () => {
     );
     process.env.ARCA_CREDENTIALS_MASTER_KEY = "bad";
     expect(() => encryptSecret("secret")).toThrow();
+  });
+  it("cifra y recupera datos binarios sin exponerlos como texto", () => {
+    process.env.ARCA_CREDENTIALS_MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
+    const source = Buffer.from([0, 255, 1, 64, 10]);
+    const encrypted = encryptBinary(source);
+    expect(encrypted).not.toContain(source.toString("base64"));
+    expect(decryptBinary(encrypted)).toEqual(source);
   });
 });

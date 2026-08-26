@@ -17,7 +17,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const input = schema.parse(await request.json()); const id = (await params).id; const before = await prisma.workOrder.findUnique({ where: { id }, include: { client: true } }); if (!before) return NextResponse.json({ error: "OT inexistente" }, { status: 404 });
     for (const field of fields) if (!(await eligible(input[field.key], field.role))) return NextResponse.json({ error: `El usuario asignado a ${field.task} debe estar activo y tener el rol correspondiente.` }, { status: 400 });
     const order = await prisma.$transaction(async (tx) => {
-      const updated = await tx.workOrder.update({ where: { id }, data: input });
+      const updated = await tx.workOrder.update({ where: { id }, data: {
+        ...input,
+        ...(before.corteUsuarioId !== input.corteUsuarioId ? { corteAsignadoAt: input.corteUsuarioId ? new Date() : null } : {}),
+        ...(before.armadoUsuarioId !== input.armadoUsuarioId ? { armadoAsignadoAt: input.armadoUsuarioId ? new Date() : null } : {}),
+        ...(before.produccionUsuarioId !== input.produccionUsuarioId ? { produccionAsignadoAt: input.produccionUsuarioId ? new Date() : null } : {}),
+      } });
       for (const field of fields) {
         const previous = before[field.key]; const next = input[field.key]; if (previous === next) continue;
         if (previous) await tx.notification.create({ data: { userId: previous, type: "OT_REASSIGNED", title: `${before.numero} fue reasignada`, message: `Ya no estás asignado a ${field.task} en ${before.client.razonSocial}.`, entityType: "WorkOrder", entityId: id, priority: "NORMAL", deduplicationKey: `unassigned:${id}:${field.key}:${previous}:${updated.updatedAt.getTime()}` } });

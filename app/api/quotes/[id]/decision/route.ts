@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
 import { z } from "zod";
 
@@ -8,7 +9,7 @@ const schema = z.object({ decision: z.enum(["APROBADO", "RECHAZADO"]), observaci
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
-  const allowed = user.role === "ADMIN" || user.role === "VENTAS" || user.userRoles.some((entry) => entry.role.active && entry.role.permissions.some((permission) => permission.permission.key === "quotes.approve"));
+  const allowed = hasPermission(user, "quotes.approve") || hasPermission(user, "quotes.reject");
   if (!allowed) return NextResponse.json({ error: "No tenés permiso para decidir presupuestos" }, { status: 403 });
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Decisión inválida" }, { status: 400 });

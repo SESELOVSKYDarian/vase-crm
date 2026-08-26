@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 
 const n = (v: unknown) => Number(v ?? 0);
 const labels: Record<string, string> = { PENDIENTE: "Pendiente", EN_PROCESO: "En proceso", TERMINADA: "Terminada", ANULADA: "Anulada" };
@@ -9,6 +10,7 @@ const methodLabels: Record<string, string> = { EFECTIVO: "Efectivo", TRANSFERENC
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  if (!hasPermission(user, "analytics.view")) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const url = new URL(request.url);
   const tipo = url.searchParams.get("tipo") || "TODOS";
   const now = new Date();

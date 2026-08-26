@@ -131,7 +131,8 @@ export function Sidebar({
 
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
             {nav.filter((item) => {
-              if (!item.permission || permissions === null) return true;
+              if (!item.permission) return true;
+              if (permissions === null) return false;
               if (item.permission === "production") return permissions.some((permission) => permission === "production.view_all" || permission === "production.view_assigned");
               return permissions.includes(item.permission);
             }).map((item) => {
