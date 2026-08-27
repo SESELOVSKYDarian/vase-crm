@@ -7,6 +7,7 @@ import { encryptBinary } from "@/lib/security/encryption";
 import { importPkcs12WithCompatibility, Pkcs12ImportError, validatePkcs12Upload } from "@/lib/arca/pkcs12";
 import { writeAudit } from "@/lib/audit";
 import { createHash } from "node:crypto";
+import { arcaConnectionReset, invalidateArcaTickets } from "@/lib/arca/configuration";
 
 export const runtime = "nodejs";
 
@@ -25,9 +26,10 @@ export async function POST(request: Request) {
     buffer = Buffer.from(await file.arrayBuffer());
     const { credentials: imported, compatibilityUsed } = await importPkcs12WithCompatibility(buffer, password);
     const current = await prisma.companySettings.findFirst();
-    const data = { arcaCertificate: encryptSecret(imported.certificatePem), arcaPrivateKey: encryptSecret(imported.privateKeyPem), arcaCertificateSubject: imported.metadata.subject, arcaCertificateIssuer: imported.metadata.issuer, arcaCertificateSerial: imported.metadata.serial, arcaCertificateValidFrom: imported.metadata.validFrom, arcaCertificateValidTo: imported.metadata.validTo, arcaCredentialSource: "PKCS12" };
+    const data = { arcaCertificate: encryptSecret(imported.certificatePem), arcaPrivateKey: encryptSecret(imported.privateKeyPem), arcaCertificateSubject: imported.metadata.subject, arcaCertificateIssuer: imported.metadata.issuer, arcaCertificateSerial: imported.metadata.serial, arcaCertificateValidFrom: imported.metadata.validFrom, arcaCertificateValidTo: imported.metadata.validTo, arcaCredentialSource: "PKCS12", ...arcaConnectionReset };
     const settings = await prisma.$transaction(async (tx) => {
       const saved = current ? await tx.companySettings.update({ where: { id: current.id }, data }) : await tx.companySettings.create({ data: { ...data, razonSocial: "Vase CRM", cuit: "", condicionIva: "RESPONSABLE_INSCRIPTO", puntoVentaDefault: 1 } });
+      await invalidateArcaTickets(tx);
       await tx.arcaCredentialFile.updateMany({ where: { environment: saved.arcaEnvironment, active: true }, data: { active: false } });
       await tx.arcaCredentialFile.create({ data: { originalFileName: file.name, fileType: "PKCS12", encryptedFileData: encryptBinary(buffer!), fileSize: file.size, environment: saved.arcaEnvironment, uploadedById: user.id, certificateSubject: imported.metadata.subject, certificateIssuer: imported.metadata.issuer, certificateSerial: imported.metadata.serial, certificateValidFrom: imported.metadata.validFrom, certificateValidTo: imported.metadata.validTo, fingerprintSha256: createHash("sha256").update(imported.certificatePem).digest("hex"), active: true } });
       return saved;

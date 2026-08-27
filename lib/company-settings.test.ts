@@ -11,6 +11,7 @@ describe("buildSettingsPayload", () => {
     expect(payload.arcaPrivateKey).toBeUndefined();
   });
   it("normaliza nulls de lectura sin invalidar el payload", () => {
-    expect(buildSettingsPayload({ arcaCuit: null, razonSocial: null, cuit: null, arcaPuntoVenta: null })).toMatchObject({ arcaPuntoVenta: null });
+    expect(buildSettingsPayload({ arcaCuit: null, razonSocial: null, cuit: null, arcaPuntoVenta: null })).toMatchObject({ arcaCuit: null, arcaPuntoVenta: null });
+    expect(buildSettingsPayload({ arcaCuit: "" })).toMatchObject({ arcaCuit: null });
   });
 });

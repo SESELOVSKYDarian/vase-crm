@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -40,11 +40,15 @@ function ArcaPanel({
   set,
   save,
   status,
+  reloadSettings,
+  onStatus,
 }: {
   form: Settings;
   set: (key: string, value: any) => void;
   save: (overrides?: Settings) => Promise<void>;
   status: string;
+  reloadSettings: () => Promise<void>;
+  onStatus: (message: string) => void;
 }) {
   const certRef = useRef<HTMLInputElement>(null),
     keyRef = useRef<HTMLInputElement>(null),
@@ -58,6 +62,9 @@ function ArcaPanel({
     [pkcs12Password, setPkcs12Password] = useState(""),
     [pkcs12Status, setPkcs12Status] = useState(""),
     [testInvoiceOpen, setTestInvoiceOpen] = useState(false),
+    [clearOpen, setClearOpen] = useState(false),
+    [clearConfirmation, setClearConfirmation] = useState(""),
+    [clearError, setClearError] = useState(""),
     [arcaParameters, setArcaParameters] = useState<any>({ data: ARCA_VOUCHER_TYPES, documents: ARCA_DOCUMENT_TYPES, ivaTypes: ARCA_IVA_TYPES, source: "FALLBACK" }),
     [testInvoice, setTestInvoice] = useState({
       voucherType: "FACTURA_A",
@@ -119,7 +126,21 @@ function ArcaPanel({
         ? "deleteArcaCertificate"
         : "deleteArcaPrivateKey"]: true,
     });
+    await reloadSettings();
     refresh();
+  }
+  async function clearArcaConfiguration() {
+    setClearError("");
+    setRunning("clear");
+    const response = await fetch("/api/arca/configuration", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: clearConfirmation }) });
+    const payload = await response.json().catch(() => null);
+    setRunning("");
+    if (!response.ok) return setClearError(payload?.error ?? "No se pudo borrar la configuración ARCA.");
+    setClearOpen(false);
+    setClearConfirmation("");
+    await reloadSettings();
+    refresh();
+    onStatus(payload?.data?.message ?? "Configuración ARCA eliminada.");
   }
   async function submitTestInvoice() {
     setRunning("invoice");
@@ -179,6 +200,7 @@ function ArcaPanel({
       setPkcs12Password("");
       if (pkcs12Ref.current) pkcs12Ref.current.value = "";
       setPkcs12Status(payload.compatibilityUsed ? "Credenciales importadas correctamente. Certificado y clave privada verificados en modo de compatibilidad." : "Credenciales importadas correctamente. Certificado y clave privada verificados.");
+      await reloadSettings();
       refresh();
     } else setPkcs12Status(payload?.error ?? "No se pudieron importar las credenciales.");
     setRunning("");
@@ -334,12 +356,15 @@ function ArcaPanel({
             >
               <Save className="h-4 w-4" /> Guardar configuración ARCA
             </Button>
+            <Button type="button" variant="outline" className="border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300" onClick={() => { setClearError(""); setClearOpen(true); }}>
+              <Trash2 className="h-4 w-4" /> Borrar configuración ARCA
+            </Button>
             {status && (
               <span className="text-sm text-muted-foreground">{status}</span>
             )}
           </div>
         </Card>
-        <ArcaCredentialFiles />
+        <ArcaCredentialFiles onChanged={async () => { await reloadSettings(); refresh(); }} />
         <Card className="p-5">
           <h2 className="font-semibold">Pruebas de conexión ARCA</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -531,6 +556,7 @@ function ArcaPanel({
           </>
         }
       />
+      <Modal open={clearOpen} onClose={() => setClearOpen(false)} title="¿Borrar toda la configuración ARCA?" description="Se eliminarán CUIT emisor, punto de venta ARCA, certificado, clave privada, PFX/P12 y tickets de acceso. No se eliminarán facturas, CAE ni auditoría." footer={<><Button variant="outline" onClick={() => setClearOpen(false)}>Cancelar</Button><Button variant="destructive" disabled={running === "clear" || clearConfirmation !== "BORRAR ARCA"} onClick={clearArcaConfiguration}>{running === "clear" ? "Borrando…" : "Borrar configuración"}</Button></>}><Label>Escribí BORRAR ARCA para confirmar</Label><Input value={clearConfirmation} onChange={(event) => setClearConfirmation(event.target.value)} />{clearError && <p role="alert" className="mt-3 text-sm text-red-600">{clearError}</p>}</Modal>
       <Modal
         open={testInvoiceOpen}
         onClose={() => setTestInvoiceOpen(false)}
@@ -734,11 +760,11 @@ function TestButton({ label, action, running, onClick }: any) {
   );
 }
 
-function ArcaCredentialFiles() {
+function ArcaCredentialFiles({ onChanged }: { onChanged: () => Promise<void> }) {
   const [files, setFiles] = useState<any[]>([]), [selected, setSelected] = useState<any>(null), [removing, setRemoving] = useState<any>(null), [confirmation, setConfirmation] = useState(""), [error, setError] = useState("");
   const refresh = () => fetch("/api/arca/credentials").then((response) => response.ok ? response.json() : { data: [] }).then((payload) => setFiles(payload.data ?? []));
   useEffect(() => { refresh(); }, []);
-  async function remove() { const response = await fetch(`/api/arca/credentials/${removing.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation }) }); const body = await response.json().catch(() => null); if (!response.ok) return setError(body?.error ?? "No se pudo eliminar."); setRemoving(null); setConfirmation(""); refresh(); }
+  async function remove() { const response = await fetch(`/api/arca/credentials/${removing.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation }) }); const body = await response.json().catch(() => null); if (!response.ok) return setError(body?.error ?? "No se pudo eliminar."); setRemoving(null); setConfirmation(""); await onChanged(); refresh(); }
   return <Card className="p-5"><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold">Archivos y credenciales ARCA</h2><p className="mt-1 text-sm text-muted-foreground">Metadatos seguros del archivo original. El contenido y la clave privada nunca se muestran.</p></div><Badge>{files.filter((file) => file.active).length ? "Credencial activa" : "Sin archivo activo"}</Badge></div><div className="mt-4 space-y-2">{files.map((file) => <div key={file.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{file.originalFileName}</p><p className="mt-0.5 text-xs text-muted-foreground">{file.fileType} · {(file.fileSize / 1024).toFixed(1)} KB · {file.environment} · {file.active ? "Activo" : "Histórico"}</p></div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setSelected(file)}><Eye className="h-3.5 w-3.5" /> Detalles</Button><Button size="sm" variant="outline" onClick={() => { setError(""); setRemoving(file); }}><Trash2 className="h-3.5 w-3.5" /> Eliminar</Button></div></div>)}{!files.length && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Todavía no hay archivos PFX/P12 administrados.</p>}</div><Modal open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.originalFileName ?? "Credencial"} description="Información de seguridad del archivo; no se exponen secretos."><dl className="grid gap-3 text-sm sm:grid-cols-2">{[["Tipo", selected?.fileType], ["Ambiente", selected?.environment], ["Tamaño", selected ? `${(selected.fileSize / 1024).toFixed(1)} KB` : ""], ["Importado por", selected?.uploadedBy?.name], ["Titular", selected?.certificateSubject], ["Emisor", selected?.certificateIssuer], ["Serie", selected?.certificateSerial], ["Huella SHA-256", selected?.fingerprintSha256], ["Vigente desde", selected?.certificateValidFrom ? formatDate(selected.certificateValidFrom) : "—"], ["Vence", selected?.certificateValidTo ? formatDate(selected.certificateValidTo) : "—"]].map(([label, value]) => <div key={String(label)}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-all font-medium">{value || "—"}</dd></div>)}</dl></Modal><Modal open={Boolean(removing)} onClose={() => setRemoving(null)} title={`¿Eliminar ${removing?.originalFileName ?? "archivo"}?`} description={removing?.active ? "Esta es la credencial activa. La conexión con ARCA quedará sin configurar y se invalidarán los tickets de acceso." : "Se eliminará el archivo cifrado histórico; no se modifican facturas ni CAE."} footer={<><Button variant="outline" onClick={() => setRemoving(null)}>Cancelar</Button><Button disabled={removing?.active && confirmation !== "ELIMINAR"} onClick={remove}>Eliminar archivo</Button></>}>{removing?.active && <div><Label>Escribí ELIMINAR para confirmar</Label><Input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div>}{error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}</Modal></Card>;
 }
 
@@ -769,17 +795,23 @@ export default function ConfiguracionPage() {
     [status, setStatus] = useState(""),
     [users, setUsers] = useState<any[]>([]),
     [roles, setRoles] = useState<any[]>([]);
+  const reloadSettings = useCallback(async () => {
+    const response = await fetch("/api/company-settings", { cache: "no-store" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) return;
+    // Reemplazamos el snapshot completo: un null del servidor debe borrar el
+    // valor anterior del formulario, no quedar oculto por un merge local.
+    setForm({ arcaEnvironment: "HOMOLOGACION", puntoVentaDefault: 1, ...(payload?.data ?? {}) });
+  }, []);
   useEffect(() => {
-    fetch("/api/company-settings")
-      .then((r) => r.json())
-      .then((p) => setForm((x) => ({ ...x, ...(p.data ?? {}) })));
+    reloadSettings();
     fetch("/api/users")
       .then((r) => (r.ok ? r.json() : []))
       .then(setUsers);
     fetch("/api/roles")
       .then((r) => (r.ok ? r.json() : []))
       .then((p) => setRoles(Array.isArray(p) ? p : []));
-  }, []);
+  }, [reloadSettings]);
   const set = (key: string, value: any) =>
     setForm((current) => ({ ...current, [key]: value }));
   async function save(overrides: Settings = {}) {
@@ -791,14 +823,15 @@ export default function ConfiguracionPage() {
     });
     const payload = await response.json().catch(() => null);
     if (response.ok) {
-      setForm((current) => ({
-        ...current,
+      setForm({
+        arcaEnvironment: "HOMOLOGACION",
+        puntoVentaDefault: 1,
         ...(payload.data ?? {}),
         arcaCertificate: "",
         arcaPrivateKey: "",
         deleteArcaCertificate: false,
         deleteArcaPrivateKey: false,
-      }));
+      });
       setStatus("Configuración guardada correctamente.");
     } else setStatus([payload?.error ?? "No se pudo guardar.", formatSettingsFieldErrors(payload?.fields)].filter(Boolean).join(" "));
   }
@@ -884,7 +917,7 @@ export default function ConfiguracionPage() {
         </Card>
       )}
       {tab === "arca" && (
-        <ArcaPanel form={form} set={set} save={save} status={status} />
+        <ArcaPanel form={form} set={set} save={save} status={status} reloadSettings={reloadSettings} onStatus={setStatus} />
       )}{" "}
       {tab === "usuarios" && <UserManagement users={users} roles={roles} onRefresh={() => fetch("/api/users").then((r) => r.ok ? r.json() : []).then(setUsers)} />}
       {tab === "roles" && (
