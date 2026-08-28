@@ -43,7 +43,7 @@ export function Modal({ open, onClose, title, description, children = null, foot
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -61,7 +61,7 @@ export function Modal({ open, onClose, title, description, children = null, foot
             aria-modal="true"
             aria-labelledby="modal-title"
             ref={dialogRef}
-            className={`relative z-10 w-full ${sizeMap[size]} overflow-hidden rounded-2xl border border-border bg-card shadow-[0_28px_80px_-32px_rgba(15,23,42,.55)]`}
+            className={`relative z-10 w-full ${sizeMap[size]} max-h-[92dvh] overflow-hidden rounded-t-2xl border border-border bg-card shadow-[0_28px_80px_-32px_rgba(15,23,42,.55)] sm:rounded-2xl`}
           >
             <div className="flex items-start justify-between gap-4 border-b border-border p-5">
               <div>
@@ -76,7 +76,7 @@ export function Modal({ open, onClose, title, description, children = null, foot
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div data-modal-content className="max-h-[70vh] overflow-y-auto p-5">{children}</div>
+            <div data-modal-content className="max-h-[68dvh] overflow-y-auto p-5 sm:max-h-[70vh]">{children}</div>
             {footer && <div className="flex justify-end gap-2 border-t border-border p-4">{footer}</div>}
           </motion.div>
         </div>

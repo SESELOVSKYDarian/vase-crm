@@ -14,7 +14,7 @@ const stateLabel: Record<string, string> = { PENDIENTE: "Pendiente", EN_PROCESO:
 export function ProductionDashboard() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => { let active = true; fetch("/api/dashboard/production").then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.error || "No se pudo cargar tu panel."); return body.data; }).then((payload) => active && setData(payload)).catch((reason) => active && setError(reason.message)); return () => { active = false; }; }, []);
+  useEffect(() => { let active = true; const load = () => fetch("/api/dashboard/production").then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.error || "No se pudo cargar tu panel."); return body.data; }).then((payload) => active && setData(payload)).catch((reason) => active && setError(reason.message)); load(); window.addEventListener("production-progress-updated", load); return () => { active = false; window.removeEventListener("production-progress-updated", load); }; }, []);
   const summary = data?.summary;
   const metrics = [
     { label: "OT pendientes", value: summary?.pending ?? "—", Icon: ClipboardList, tone: "text-amber-700 bg-amber-500/10" },

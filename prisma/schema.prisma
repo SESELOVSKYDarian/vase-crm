@@ -421,6 +421,8 @@ model ProductionProgressEntry {
   id         String @id @default(cuid())
   workOrderId String
   workOrder  WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrderItemId String?
+  workOrderItem WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: Cascade)
   userId     String
   user       User @relation(fields: [userId], references: [id])
   task       ProductionTaskType
@@ -429,6 +431,7 @@ model ProductionProgressEntry {
   note       String?
   createdAt  DateTime @default(now())
   @@index([workOrderId, task])
+  @@index([workOrderItemId, task])
   @@index([userId, date])
 }
 
@@ -441,6 +444,7 @@ model WorkOrderItem {
   anchoMm     Int
   altoMm      Int
   m2          Decimal   @db.Decimal(12, 3)
+  progressEntries ProductionProgressEntry[]
 
   @@index([workOrderId])
 }
