@@ -8,6 +8,7 @@ import { getArcaProvider } from "@/modules/arca/server";
 import { assertSameOrigin } from "@/lib/security/csrf";
 const schema = z.object({
   workOrderId: z.string().min(1),
+  quoteId: z.string().min(1).optional(),
   tipoFacturacion: z.enum(["A", "N"]),
   puntoVenta: z.coerce.number().int().positive().optional(),
 });
@@ -76,11 +77,6 @@ export async function POST(request: Request) {
     });
     if (!o)
       return NextResponse.json({ error: "OT inexistente" }, { status: 404 });
-    if (!o.deliveries.length)
-      return NextResponse.json(
-        { error: "Primero confirmá un remito para esta OT" },
-        { status: 409 },
-      );
     if (o.invoices.length)
       return NextResponse.json(
         { error: "Esta OT ya tiene una factura emitida" },
@@ -98,6 +94,7 @@ export async function POST(request: Request) {
           arcaVoucherType: a ? "FACTURA_A" : null,
           clientId: o.clientId,
           workOrderId: o.id,
+          quoteId: parsed.data.quoteId ?? o.quoteId,
           cuit: o.client.cuit,
           condicionIva: o.client.condicionIva,
           puntoVenta:

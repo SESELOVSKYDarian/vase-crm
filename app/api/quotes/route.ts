@@ -6,15 +6,19 @@ import { writeAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const itemSchema = z.object({ producto: z.string().optional(), composicion: z.string().optional(), cantidad: z.coerce.number().int().positive(), anchoMm: z.coerce.number().int().positive(), altoMm: z.coerce.number().int().positive(), precioM2: z.coerce.number().nonnegative().optional(), precioVentaUnitario: z.coerce.number().nonnegative().optional(), subtotalNeto: z.coerce.number().nonnegative().optional(), bonificacionPct: z.coerce.number().min(0).max(100).optional() });
-const schema = z.object({ tipo: z.enum(["SIMPLE", "DVH"]), clienteId: z.string().min(1), obra: z.string().trim().optional().default(""), fechaEntrega: z.string().min(1), estado: z.enum(["BORRADOR", "ENVIADO"]).default("BORRADOR"), totals: z.object({ cantidad: z.coerce.number().int().positive(), m2: z.coerce.number().nonnegative(), subtotalBruto: z.coerce.number().nonnegative(), bonificacion: z.coerce.number().nonnegative(), subtotalNeto: z.coerce.number().nonnegative(), iva: z.coerce.number().nonnegative(), total: z.coerce.number().positive() }), items: z.array(itemSchema).min(1) });
+const schema = z.object({ tipo: z.enum(["SIMPLE", "DVH"]), clienteId: z.string().min(1), titulo: z.string().trim().max(160).optional().default(""), obra: z.string().trim().optional().default(""), fechaEntrega: z.string().min(1), estado: z.enum(["BORRADOR", "ENVIADO"]).default("BORRADOR"), totals: z.object({ cantidad: z.coerce.number().int().positive(), m2: z.coerce.number().nonnegative(), subtotalBruto: z.coerce.number().nonnegative(), bonificacion: z.coerce.number().nonnegative(), subtotalNeto: z.coerce.number().nonnegative(), iva: z.coerce.number().nonnegative(), total: z.coerce.number().positive() }), items: z.array(itemSchema).min(1) });
 function canCreate(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) { return hasPermission(user, "quotes.create"); }
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
   if (!hasPermission(user, "quotes.view")) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-  const status = new URL(request.url).searchParams.get("status");
-  try { const quotes = await prisma.quote.findMany({ where: status ? { estado: status as never } : { estado: { not: "ANULADO" } }, include: { client: true, workOrder: { select: { id: true, numero: true } } }, orderBy: { updatedAt: "desc" } }); return NextResponse.json({ data: quotes }); }
+  const params = new URL(request.url).searchParams;
+  const status = params.get("status"); const type = params.get("type"); const clientId = params.get("clientId");
+  const from = params.get("from"); const to = params.get("to");
+  const where: any = { ...(status ? { estado: status } : { estado: { not: "ANULADO" } }), ...(type ? { tipo: type } : {}), ...(clientId ? { clientId } : {}) };
+  if (from || to) where.fecha = { ...(from ? { gte: new Date(`${from}T00:00:00-03:00`) } : {}), ...(to ? { lt: new Date(new Date(`${to}T00:00:00-03:00`).getTime() + 86400000) } : {}) };
+  try { const quotes = await prisma.quote.findMany({ where, include: { client: true, workOrder: { select: { id: true, numero: true } } }, orderBy: { updatedAt: "desc" } }); return NextResponse.json({ data: quotes, count: quotes.length }); }
   catch { return NextResponse.json({ error: "No se pudieron cargar los presupuestos" }, { status: 500 }); }
 }
 

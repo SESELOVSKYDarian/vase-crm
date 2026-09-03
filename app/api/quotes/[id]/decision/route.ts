@@ -5,7 +5,7 @@ import { hasPermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
 import { z } from "zod";
 
-const schema = z.object({ decision: z.enum(["APROBADO", "RECHAZADO"]), observaciones: z.string().max(500).optional() });
+const schema = z.object({ decision: z.enum(["APROBADO", "RECHAZADO"]), observaciones: z.string().max(500).optional(), motivoRechazo: z.string().trim().max(500).optional() }).superRefine((value, ctx) => { if (value.decision === "RECHAZADO" && !value.motivoRechazo) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["motivoRechazo"], message: "El motivo del rechazo es obligatorio" }); });
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!quote || quote.estado !== "ENVIADO") return NextResponse.json({ error: "Sólo se pueden decidir presupuestos enviados" }, { status: 409 });
   try {
   const result = await prisma.$transaction(async (tx) => {
-    const updated = await tx.quote.update({ where: { id }, data: { estado: parsed.data.decision, observaciones: parsed.data.observaciones ?? quote.observaciones } });
+    const updated = await tx.quote.update({ where: { id }, data: { estado: parsed.data.decision, observaciones: parsed.data.observaciones ?? quote.observaciones, motivoRechazo: parsed.data.decision === "RECHAZADO" ? parsed.data.motivoRechazo : null, rechazadoAt: parsed.data.decision === "RECHAZADO" ? new Date() : null, rechazadoPorId: parsed.data.decision === "RECHAZADO" ? user.id : null } });
     if (parsed.data.decision !== "APROBADO") return { quote: updated, workOrder: null };
     const existing = await tx.workOrder.findUnique({ where: { quoteId: id } });
     if (existing) return { quote: updated, workOrder: existing };

@@ -7,7 +7,7 @@ import { writeAudit } from "@/lib/audit";
 const updateSchema = z.object({ obra: z.string().trim().optional(), fechaEntrega: z.string().min(1).optional(), observaciones: z.string().max(500).nullable().optional() });
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const quote = await prisma.quote.findUnique({ where: { id: (await params).id }, include: { items: true, client: true, workOrder: true } });
+  const quote = await prisma.quote.findUnique({ where: { id: (await params).id }, include: { items: true, client: true, workOrder: true, invoices: { orderBy: { fecha: "desc" } } } });
   if (!quote) return NextResponse.json({ error: "Presupuesto no encontrado" }, { status: 404 });
   return NextResponse.json({ data: quote });
 }
