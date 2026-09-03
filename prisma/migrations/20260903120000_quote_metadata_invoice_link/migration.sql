@@ -1,6 +1,7 @@
 -- Cambios aditivos: no elimina ni modifica datos existentes.
 ALTER TABLE `Quote`
   ADD COLUMN `titulo` VARCHAR(160) NULL,
+  ADD COLUMN `fechaValidez` DATETIME(3) NULL,
   ADD COLUMN `motivoRechazo` VARCHAR(500) NULL,
   ADD COLUMN `rechazadoAt` DATETIME(3) NULL,
   ADD COLUMN `rechazadoPorId` VARCHAR(191) NULL;

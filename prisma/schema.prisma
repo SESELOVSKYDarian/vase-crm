@@ -248,6 +248,7 @@ model Quote {
   tipo            QuoteType
   fecha           DateTime        @default(now())
   fechaEntrega    DateTime
+  fechaValidez    DateTime?
   clientId        String
   client          Client          @relation(fields: [clientId], references: [id])
   obra            String
@@ -304,6 +305,7 @@ model QuoteItem {
 
   simpleDetail SimpleGlassDetail?
   dvhDetail    DvhDetail?
+  workOrderItem WorkOrderItem?
 
   @@index([quoteId])
 }
@@ -470,6 +472,8 @@ model WorkOrderItem {
   id              String                    @id @default(cuid())
   workOrderId     String
   workOrder       WorkOrder                 @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  quoteItemId     String?                   @unique
+  quoteItem       QuoteItem?                @relation(fields: [quoteItemId], references: [id])
   productoNombre  String
   cantidad        Int
   anchoMm         Int
@@ -477,8 +481,10 @@ model WorkOrderItem {
   m2              Decimal                   @db.Decimal(12, 3)
   progressEntries ProductionProgressEntry[]
   transfersFrom ProductionTransfer[]
+  deliveryNoteItems DeliveryNoteItem[]
 
   @@index([workOrderId])
+  @@index([quoteItemId])
 }
 
 // ---------------- Corte ----------------
@@ -605,10 +611,13 @@ model DeliveryNoteItem {
   deliveryNoteId    String
   deliveryNote      DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
   productoNombre    String
+  workOrderItemId   String?
+  workOrderItem     WorkOrderItem? @relation(fields: [workOrderItemId], references: [id])
   cantidadPedida    Int
   cantidadEntregada Int
 
   @@index([deliveryNoteId])
+  @@index([workOrderItemId])
 }
 
 // ---------------- Facturación / ARCA ----------------

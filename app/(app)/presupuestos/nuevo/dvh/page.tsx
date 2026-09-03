@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { computeDvhQuote } from "@/lib/calculations/dvh";
+import { computeDvhQuote, CAMARA_PRECIOS_ML } from "@/lib/calculations/dvh";
 import type { DvhItemInput } from "@/lib/calculations/types";
 import { clients } from "@/lib/mock-data";
 import { formatARS, formatM2, formatNumber } from "@/lib/format";
@@ -35,7 +35,9 @@ function emptyItem(id: string): DvhItemInput {
     altoMm: 1000,
     precioSeparadorMl: 1500,
     precioSelladoMl: 800,
+    precioCamaraMl: CAMARA_PRECIOS_ML["12mm"],
     costoInsumosExtraUnitario: 500,
+    costoManoObraM2: 1800,
     margenPct: 30,
     bonificacionPct: 0,
   };
@@ -143,22 +145,22 @@ export default function NuevoPresupuestoDvhPage() {
                   <div>
                     <Label>Vidrio exterior</Label>
                     <Select value={item.vidrioExterior.tipo} onChange={(e) => setGlass(item.id, "vidrioExterior", e.target.value)}>
-                      {GLASS_OPTIONS.map((g) => <option key={g.tipo} value={g.tipo}>{g.tipo}</option>)}
+                      {GLASS_OPTIONS.map((g) => <option key={g.tipo} value={g.tipo}>{g.tipo} · {formatARS(g.precioM2)}/m²</option>)}
                     </Select>
                   </div>
                   <div>
                     <Label>Vidrio interior</Label>
                     <Select value={item.vidrioInterior.tipo} onChange={(e) => setGlass(item.id, "vidrioInterior", e.target.value)}>
-                      {GLASS_OPTIONS.map((g) => <option key={g.tipo} value={g.tipo}>{g.tipo}</option>)}
+                      {GLASS_OPTIONS.map((g) => <option key={g.tipo} value={g.tipo}>{g.tipo} · {formatARS(g.precioM2)}/m²</option>)}
                     </Select>
                   </div>
                   <div>
                     <Label>Cámara</Label>
-                    <Select value={item.camara} onChange={(e) => updateItem(item.id, { camara: e.target.value as any })}>
-                      <option value="9mm">9mm</option>
-                      <option value="12mm">12mm</option>
-                      <option value="15mm">15mm</option>
-                      <option value="16mm">16mm</option>
+                    <Select value={item.camara} onChange={(e) => updateItem(item.id, { camara: e.target.value as any, precioCamaraMl: CAMARA_PRECIOS_ML[e.target.value as keyof typeof CAMARA_PRECIOS_ML] })}>
+                      <option value="9mm">9mm · {formatARS(CAMARA_PRECIOS_ML["9mm"])}/ml</option>
+                      <option value="12mm">12mm · {formatARS(CAMARA_PRECIOS_ML["12mm"])}/ml</option>
+                      <option value="15mm">15mm · {formatARS(CAMARA_PRECIOS_ML["15mm"])}/ml</option>
+                      <option value="16mm">16mm · {formatARS(CAMARA_PRECIOS_ML["16mm"])}/ml</option>
                     </Select>
                   </div>
                   <div>
@@ -195,6 +197,17 @@ export default function NuevoPresupuestoDvhPage() {
                     <Label>Bonif. %</Label>
                     <Input type="number" min={0} max={100} value={item.bonificacionPct} onChange={(e) => updateItem(item.id, { bonificacionPct: Number(e.target.value) })} />
                   </div>
+                </div>
+
+                <div className="mt-4 grid gap-2 rounded-lg bg-secondary/35 p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  <CostLine label={`Vidrio exterior · ${item.vidrioExterior.tipo}`} value={item.costoVidrioExteriorUnitario} hint={`${formatARS(item.vidrioExterior.precioM2)} / m²`} />
+                  <CostLine label={`Vidrio interior · ${item.vidrioInterior.tipo}`} value={item.costoVidrioInteriorUnitario} hint={`${formatARS(item.vidrioInterior.precioM2)} / m²`} />
+                  <CostLine label={`Cámara · ${item.camara}`} value={item.costoCamaraUnitario} hint={`${formatARS(item.precioCamaraMl ?? 0)} / ml`} />
+                  <CostLine label={`Separador · ${item.separador}`} value={item.costoSeparadorUnitario} hint={`${formatARS(item.precioSeparadorMl)} / ml`} />
+                  <CostLine label={`Sellado · ${item.sellado}`} value={item.costoSelladoUnitario} hint={`${formatARS(item.precioSelladoMl)} / ml`} />
+                  <CostLine label="Mano de obra" value={item.costoManoObraUnitario} hint={`${formatARS(item.costoManoObraM2 ?? 0)} / m²`} />
+                  <CostLine label="Insumos adicionales" value={item.costoInsumosExtraUnitario} hint="por unidad" />
+                  <CostLine label={`Recargo por tamaño · ${item.recargoTamanoPct}%`} value={item.recargoTamanoPct ? item.costoTotalUnitario - (item.costoTotalUnitario / (1 + item.recargoTamanoPct / 100)) : 0} hint="sobre costo" />
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
@@ -234,3 +247,5 @@ export default function NuevoPresupuestoDvhPage() {
     </div>
   );
 }
+
+function CostLine({ label, value, hint }: { label: string; value: number; hint: string }) { return <div className="min-w-0"><p className="truncate font-medium text-foreground">{label}</p><p className="font-semibold tabular-nums text-vase-green">{formatARS(value)}</p><p className="text-[11px] text-muted-foreground">{hint}</p></div>; }

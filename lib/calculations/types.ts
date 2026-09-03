@@ -62,7 +62,9 @@ export interface DvhItemInput {
   altoMm: number;
   precioSeparadorMl: number; // snapshot $/metro lineal
   precioSelladoMl: number; // snapshot $/metro lineal
+  precioCamaraMl?: number; // snapshot $/metro lineal según cámara
   costoInsumosExtraUnitario: number; // gas argón, pinza, separador esquina, etc. snapshot
+  costoManoObraM2?: number; // snapshot de mano de obra por m²
   margenPct: number; // margen comercial sobre costo
   bonificacionPct: number;
 }
@@ -76,6 +78,9 @@ export interface DvhItemComputed extends DvhItemInput {
   costoVidrioInteriorUnitario: number;
   costoSeparadorUnitario: number;
   costoSelladoUnitario: number;
+  costoCamaraUnitario: number;
+  costoManoObraUnitario: number;
+  recargoTamanoPct: number;
   costoTotalUnitario: number;
   costoTotal: number;
   precioVentaUnitario: number;

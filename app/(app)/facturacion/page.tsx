@@ -10,8 +10,10 @@ import { Receipt, Wallet, Search, Pencil, Trash2, History, Printer, MinusCircle,
 export default function FacturacionPage() {
   const [invoices, setInvoices] = useState<any[]>([]),
     [notes, setNotes] = useState<any[]>([]),
+    [approvedQuotes, setApprovedQuotes] = useState<any[]>([]),
     [open, setOpen] = useState(false),
     [selected, setSelected] = useState<any>(null),
+    [source, setSource] = useState<"remito" | "presupuesto">("remito"),
     [search, setSearch] = useState(""),
     [type, setType] = useState("N"),
     [error, setError] = useState(""),
@@ -28,23 +30,25 @@ export default function FacturacionPage() {
     Promise.all([
       fetch("/api/invoices").then((r) => r.json()),
       fetch("/api/delivery-notes").then((r) => r.json()),
-    ]).then(([a, b]) => {
+      fetch("/api/quotes?status=APROBADO").then((r) => r.json()),
+    ]).then(([a, b, c]) => {
       setInvoices(a.data ?? []);
       setNotes((b.data ?? []).filter((n: any) => n.estado === "CONFIRMADO"));
+      setApprovedQuotes(c.data ?? []);
     });
   useEffect(() => {
     load();
   }, []);
   const suggestions = useMemo(
     () =>
-      notes
+      (source === "remito" ? notes : approvedQuotes.filter((quote) => !quote.invoices?.length && quote.workOrder))
         .filter((n) =>
           `${n.numero} ${n.workOrder?.numero} ${n.client?.razonSocial}`
             .toLowerCase()
             .includes(search.toLowerCase()),
         )
         .slice(0, 8),
-    [notes, search],
+    [notes, approvedQuotes, search, source],
   );
   async function create() {
     if (!selected) return;
@@ -53,7 +57,8 @@ export default function FacturacionPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        workOrderId: selected.workOrderId,
+        workOrderId: selected.workOrderId ?? selected.workOrder?.id,
+        quoteId: source === "presupuesto" ? selected.id : selected.workOrder?.quoteId,
         tipoFacturacion: type,
       }),
     });
@@ -124,7 +129,7 @@ export default function FacturacionPage() {
               setError("");
               setOpen(true);
             }}
-            disabled={!notes.length}
+            disabled={!notes.length && !approvedQuotes.length}
           >
             <Receipt className="h-4 w-4" /> Generar factura
           </Button>
@@ -204,7 +209,9 @@ export default function FacturacionPage() {
           </>
         }
       >
-        <Label>Buscar remito confirmado</Label>
+        <Label>Origen de la factura</Label>
+        <Select value={source} onChange={(e) => { setSource(e.target.value as "remito" | "presupuesto"); setSelected(null); setSearch(""); }}><option value="remito">Remito confirmado</option><option value="presupuesto">Presupuesto aprobado</option></Select>
+        <Label className="mt-4">{source === "remito" ? "Buscar remito confirmado" : "Buscar presupuesto aprobado"}</Label>
         <Input
           value={search}
           onChange={(e) => {

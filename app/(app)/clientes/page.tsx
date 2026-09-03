@@ -58,6 +58,7 @@ export default function ClientesPage() {
                 <th className="px-4 py-3">Contacto</th>
                 <th className="px-4 py-3 text-right">Saldo cta. cte.</th>
                 <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3 text-right">Ficha</th>
               </tr>
             </thead>
             <tbody>
@@ -86,6 +87,7 @@ export default function ClientesPage() {
                     <td className="px-4 py-3">
                       <Badge variant={c.estado === "ACTIVO" ? "success" : "neutral"}>{c.estado}</Badge>
                     </td>
+                    <td className="px-4 py-3 text-right"><Link href={`/clientes/${c.id}`}><Button size="sm" variant="outline">Ver más información</Button></Link></td>
                   </motion.tr>
                 );
               })}

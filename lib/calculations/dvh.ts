@@ -9,6 +9,7 @@ const CAMARA_MM: Record<DvhItemInput["camara"], number> = {
   "15mm": 15,
   "16mm": 16,
 };
+export const CAMARA_PRECIOS_ML: Record<DvhItemInput["camara"], number> = { "9mm": 1100, "12mm": 1350, "15mm": 1550, "16mm": 1700 };
 
 /**
  * Motor de cálculo de DVH (Doble Vidriado Hermético).
@@ -41,18 +42,25 @@ export function computeDvhItem(input: DvhItemInput): DvhItemComputed {
 
   const costoVidrioExteriorUnitario = m2Unitario.mul(input.vidrioExterior.precioM2);
   const costoVidrioInteriorUnitario = m2Unitario.mul(input.vidrioInterior.precioM2);
+  const costoCamaraUnitario = perimetroMl.mul(input.precioCamaraMl ?? 0);
   const costoSeparadorUnitario = perimetroMl.mul(input.precioSeparadorMl);
   const costoSelladoUnitario = perimetroMl.mul(input.precioSelladoMl);
+  const costoManoObraUnitario = m2Unitario.mul(input.costoManoObraM2 ?? 0);
+  const recargoTamanoPct = m2Unitario.gt(6.49) ? 30 : m2Unitario.gt(4.49) ? 20 : 0;
 
   const costoTotalUnitario = costoVidrioExteriorUnitario
     .plus(costoVidrioInteriorUnitario)
+    .plus(costoCamaraUnitario)
     .plus(costoSeparadorUnitario)
     .plus(costoSelladoUnitario)
-    .plus(input.costoInsumosExtraUnitario);
+    .plus(input.costoInsumosExtraUnitario)
+    .plus(costoManoObraUnitario);
 
-  const costoTotal = costoTotalUnitario.mul(cantidad);
+  const costoConRecargoUnitario = costoTotalUnitario.mul(new Decimal(1).plus(new Decimal(recargoTamanoPct).div(100)));
 
-  const precioVentaUnitario = costoTotalUnitario.mul(new Decimal(1).plus(new Decimal(input.margenPct).div(100)));
+  const costoTotal = costoConRecargoUnitario.mul(cantidad);
+
+  const precioVentaUnitario = costoConRecargoUnitario.mul(new Decimal(1).plus(new Decimal(input.margenPct).div(100)));
   const subtotalBrutoUnitario = precioVentaUnitario;
   const subtotalBruto = subtotalBrutoUnitario.mul(cantidad);
 
@@ -70,8 +78,11 @@ export function computeDvhItem(input: DvhItemInput): DvhItemComputed {
     costoVidrioExteriorUnitario: round(costoVidrioExteriorUnitario),
     costoVidrioInteriorUnitario: round(costoVidrioInteriorUnitario),
     costoSeparadorUnitario: round(costoSeparadorUnitario),
+    costoCamaraUnitario: round(costoCamaraUnitario),
     costoSelladoUnitario: round(costoSelladoUnitario),
-    costoTotalUnitario: round(costoTotalUnitario),
+    costoManoObraUnitario: round(costoManoObraUnitario),
+    recargoTamanoPct,
+    costoTotalUnitario: round(costoConRecargoUnitario),
     costoTotal: round(costoTotal),
     precioVentaUnitario: round(precioVentaUnitario),
     subtotalBruto: round(subtotalBruto),

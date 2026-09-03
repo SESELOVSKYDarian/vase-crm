@@ -17,21 +17,23 @@ function canInvoice(
 ) {
   return hasPermission(u, "invoices.create");
 }
-export async function GET() {
+export async function GET(request: Request) {
   const u = await getCurrentUser();
   if (!u)
     return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
   if (!hasPermission(u, "invoices.view")) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   try {
-    const rows = await prisma.invoice.findMany({
+    const params = new URL(request.url).searchParams; const page = Math.max(1, Number(params.get("page") ?? 1)); const pageSize = Math.min(50, Math.max(1, Number(params.get("pageSize") ?? 15))); const where: any = {}; const clientId = params.get("clientId"); const from = params.get("from"); const to = params.get("to"); if (clientId) where.clientId = clientId; if (from || to) where.fecha = { ...(from ? { gte: new Date(`${from}T00:00:00-03:00`) } : {}), ...(to ? { lt: new Date(new Date(`${to}T00:00:00-03:00`).getTime() + 86400000) } : {}) };
+    const [rows, total] = await Promise.all([prisma.invoice.findMany({
+      where,
       include: {
         client: true,
         workOrder: true,
         items: true,
         allocations: true,
       },
-      orderBy: { createdAt: "desc" },
-    });
+      orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize,
+    }), prisma.invoice.count({ where })]);
     return NextResponse.json({
       data: rows.map((i) => {
         const pagado = i.allocations.reduce((s, a) => s + Number(a.monto), 0);
@@ -40,7 +42,7 @@ export async function GET() {
           importePagado: pagado,
           saldoPendiente: Math.max(0, Number(i.total) - pagado),
         };
-      }),
+      }), count: total, pagination: { page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
     });
   } catch {
     return NextResponse.json(

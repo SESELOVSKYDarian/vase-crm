@@ -49,19 +49,21 @@ export default function CobrosPage() {
     [rate, setRate] = useState("");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [from, setFrom] = useState(""); const [to, setTo] = useState(""); const [filterClientId, setFilterClientId] = useState(""); const [page, setPage] = useState(1); const [total, setTotal] = useState(0); const pageSize = 15;
   const load = () =>
     Promise.all([
-      fetch("/api/payments").then((r) => r.json()),
+      fetch(`/api/payments/history?page=${page}&pageSize=${pageSize}${filterClientId ? `&clientId=${filterClientId}` : ""}${from ? `&from=${from}` : ""}${to ? `&to=${to}` : ""}`).then((r) => r.json()),
       fetch("/api/clients").then((r) => r.json()),
       fetch("/api/invoices").then((r) => r.json()),
     ]).then(([p, c, i]) => {
       setPays(p.data ?? []);
+      setTotal(p.count ?? 0);
       setClients(c.data ?? []);
       setInvoices(i.data ?? []);
     });
   useEffect(() => {
     load();
-  }, []);
+  }, [page, from, to, filterClientId]);
   useEffect(() => {
     const id = query.get("clientId"),
       invoiceId = query.get("invoiceId");
@@ -219,6 +221,7 @@ export default function CobrosPage() {
         </div>
       </div>
       <div className="space-y-3">
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-3"><div><Label>Desde</Label><Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} /></div><div><Label>Hasta</Label><Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} /></div><div><Label>Cliente</Label><Select value={filterClientId} onChange={(e) => { setFilterClientId(e.target.value); setPage(1); }}><option value="">Todos los clientes</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.razonSocial}</option>)}</Select></div>{(from || to || filterClientId) && <Button variant="outline" onClick={() => { setFrom(""); setTo(""); setFilterClientId(""); setPage(1); }}>Limpiar filtros</Button>}</div>
         {pays.map((p) => (
           <Card
             key={p.id}
@@ -270,6 +273,7 @@ export default function CobrosPage() {
           </Card>
         )}
       </div>
+      {total > pageSize && <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3"><span className="text-sm text-muted-foreground">Página {page} de {Math.ceil(total / pageSize)}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Anterior</Button><Button size="sm" variant="outline" disabled={page >= Math.ceil(total / pageSize)} onClick={() => setPage((p) => p + 1)}>Siguiente</Button></div></div>}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
