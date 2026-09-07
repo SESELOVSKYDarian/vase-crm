@@ -26,19 +26,21 @@ export default function FacturacionPage() {
     [adjustmentDescription, setAdjustmentDescription] = useState(""),
     [adjustmentMode, setAdjustmentMode] = useState("BORRADOR"),
     [adjustmentItems, setAdjustmentItems] = useState<any[]>([]);
+  const [from, setFrom] = useState(""); const [to, setTo] = useState(""); const [filterClientId, setFilterClientId] = useState(""); const [page, setPage] = useState(1); const [totalInvoices, setTotalInvoices] = useState(0); const pageSize = 15;
   const load = () =>
     Promise.all([
-      fetch("/api/invoices").then((r) => r.json()),
+      fetch(`/api/invoices?page=${page}&pageSize=${pageSize}${filterClientId ? `&clientId=${filterClientId}` : ""}${from ? `&from=${from}` : ""}${to ? `&to=${to}` : ""}`).then((r) => r.json()),
       fetch("/api/delivery-notes").then((r) => r.json()),
       fetch("/api/quotes?status=APROBADO").then((r) => r.json()),
     ]).then(([a, b, c]) => {
       setInvoices(a.data ?? []);
+      setTotalInvoices(a.count ?? 0);
       setNotes((b.data ?? []).filter((n: any) => n.estado === "CONFIRMADO"));
       setApprovedQuotes(c.data ?? []);
     });
   useEffect(() => {
     load();
-  }, []);
+  }, [page, from, to, filterClientId]);
   const suggestions = useMemo(
     () =>
       (source === "remito" ? notes : approvedQuotes.filter((quote) => !quote.invoices?.length && quote.workOrder))
@@ -136,6 +138,7 @@ export default function FacturacionPage() {
         </div>
       </div>
       <div className="space-y-3">
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-3"><div><Label>Desde</Label><Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} /></div><div><Label>Hasta</Label><Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} /></div><div><Label>Cliente</Label><Select value={filterClientId} onChange={(e) => { setFilterClientId(e.target.value); setPage(1); }}><option value="">Todos los clientes</option>{approvedQuotes.map((q) => <option key={q.clientId} value={q.clientId}>{q.client?.razonSocial}</option>)}</Select></div>{(from || to || filterClientId) && <Button variant="outline" onClick={() => { setFrom(""); setTo(""); setFilterClientId(""); setPage(1); }}>Limpiar filtros</Button>}</div>
         <div className="flex flex-wrap gap-2"><Button size="sm" variant={filter === "TODOS" ? "default" : "outline"} onClick={() => setFilter("TODOS")}>Todos</Button><Button size="sm" variant={filter === "FACTURA" ? "default" : "outline"} onClick={() => setFilter("FACTURA")}>Facturas</Button><Button size="sm" variant={filter === "NOTA_CREDITO" ? "default" : "outline"} onClick={() => setFilter("NOTA_CREDITO")}>Notas de crédito</Button><Button size="sm" variant={filter === "NOTA_DEBITO" ? "default" : "outline"} onClick={() => setFilter("NOTA_DEBITO")}>Notas de débito</Button></div>
         {visibleInvoices.map((i) => (
           <Card
@@ -194,6 +197,7 @@ export default function FacturacionPage() {
           </Card>
         )}
       </div>
+      {totalInvoices > pageSize && <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3"><span className="text-sm text-muted-foreground">Página {page} de {Math.ceil(totalInvoices / pageSize)}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Anterior</Button><Button size="sm" variant="outline" disabled={page >= Math.ceil(totalInvoices / pageSize)} onClick={() => setPage((p) => p + 1)}>Siguiente</Button></div></div>}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
